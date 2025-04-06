@@ -2,6 +2,7 @@ import { BrowserWindow, screen, Menu, Tray, app, ipcMain } from 'electron';
 import path from 'path';
 import { __dirname, downloadAndCacheFile, calculateDimensions, clearFileCache } from './utils.js';
 import { saveMonitorConfig } from './monitor-select-module.js';
+import { showTwitchSettingsWindow, addRewardListener, removeRewardListener } from './twitch-module.js';
 
 // Main overlay window
 let mainWindow;
@@ -29,6 +30,9 @@ export function createOverlay(monitorInfo) {
     }
   });
 
+  //open devtools for debugging
+  mainWindow.webContents.openDevTools({ mode: 'detach' });
+
   // Load the index.html of the app
   mainWindow.loadFile(path.join(__dirname, '..', 'frontend', 'overlay', 'index.html'));
   
@@ -50,7 +54,61 @@ export function createOverlay(monitorInfo) {
     }
   });
   
+  // Register Twitch reward listener
+  setupTwitchRewardListener();
+  
   return mainWindow;
+}
+
+// Add a function to handle Twitch reward redemptions
+function setupTwitchRewardListener() {
+  // Add listener for Twitch reward redemptions
+  addRewardListener(handleTwitchReward);
+}
+
+// Handle Twitch reward redemption event
+async function handleTwitchReward({ redemption, config }) {
+  try {
+    console.log(`Twitch reward redeemed: ${redemption.reward.title}`);
+    console.log(`User: ${redemption.user_name}, Input: ${redemption.user_input || 'N/A'}`);
+    
+    if (mainWindow) {
+      // Determine the media type
+      let mediaType = config.type || 'image';
+      
+      // Get screen dimensions for size calculations
+      const currentScreen = screen.getDisplayMatching(mainWindow.getBounds());
+      const screenWidth = currentScreen.size.width;
+      const screenHeight = currentScreen.size.height;
+      
+      // Calculate dimensions if specified in config
+      let dimensions = calculateDimensions(
+        config.width, 
+        config.height, 
+        screenWidth,
+        screenHeight
+      );
+
+      // Send the data to the renderer process
+      mainWindow.webContents.send('display-overlay', {
+        type: mediaType,
+        path: config.path.replace(/\\/g, '/'), // Convert backslashes to forward slashes
+        x: config.x || 0,
+        y: config.y || 0,
+        duration: config.duration || 5000,
+        width: dimensions?.width,
+        height: dimensions?.height,
+        chromaKey: config.chromaKey || null,
+        redemptionInfo: {
+          title: redemption.reward.title,
+          userName: redemption.user_name,
+          userInput: redemption.user_input || ''
+        }
+      });
+    }
+  } catch (err) {
+    console.error('Error handling Twitch reward:', err);
+  }
 }
 
 // Create system tray with context menu
@@ -97,61 +155,30 @@ function createSystemTray() {
     },
     { type: 'separator' },
     {
+      label: 'Twitch Settings',
+      click: () => {
+        // Open Twitch settings window
+        showTwitchSettingsWindow();
+      }
+    },
+    {
       label: 'Settings',
       click: () => {
-        // TODO: Implement settings window
-        // For now, just show a temporary settings window
+        // Create a proper settings window using the same approach as Twitch settings
         const settingsWindow = new BrowserWindow({
-          width: 400,
-          height: 300,
+          width: 600,
+          height: 700,
           webPreferences: {
+            preload: path.join(__dirname, '..', 'shared', 'twitch-settings-preload', 'index.js'),
             nodeIntegration: false,
             contextIsolation: true
           },
-          title: 'Overlay Settings',
+          title: 'Twitch Settings',
           autoHideMenuBar: true
         });
         
-        // Create a simple HTML content
-        const settingsContent = `
-          <html>
-          <head>
-            <title>Twitch Redeem Overlay Settings</title>
-            <style>
-              body {
-                font-family: Arial, sans-serif;
-                margin: 20px;
-                background-color: #f5f5f5;
-              }
-              h1 {
-                color: #6441a5;
-              }
-              .info {
-                background-color: #fff;
-                border-radius: 8px;
-                padding: 15px;
-                margin-top: 20px;
-                box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-              }
-            </style>
-          </head>
-          <body>
-            <h1>Overlay Settings</h1>
-            <div class="info">
-              <p>Settings will be implemented in a future update.</p>
-              <p>For now, you can use the system tray icon to:</p>
-              <ul>
-                <li>Toggle the red border</li>
-                <li>Toggle click-through</li>
-                <li>Exit the application</li>
-              </ul>
-            </div>
-          </body>
-          </html>
-        `;
-        
-        // Load HTML content
-        settingsWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(settingsContent)}`);
+        // Load the settings page from the frontend folder
+        settingsWindow.loadFile(path.join(__dirname, '..', 'frontend', 'twitch-settings', 'index.html'));
       }
     },
     { type: 'separator' },
@@ -249,6 +276,9 @@ export function getMainWindow() {
 
 // Close the overlay window
 export function closeOverlay() {
+  // Clean up Twitch reward listener
+  removeRewardListener(handleTwitchReward);
+  
   if (mainWindow) {
     mainWindow.close();
     mainWindow = null;

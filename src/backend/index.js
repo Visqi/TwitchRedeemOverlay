@@ -16,6 +16,7 @@ import {
   handleRedisMessage, 
   handleClearCacheMessage 
 } from './overlay-module.js';
+import { initializeTwitchModule } from './twitch-module.js';
 
 // Store references to handler functions globally so they can be accessed from other modules
 global.handleRedisMessage = handleRedisMessage;
@@ -25,49 +26,55 @@ global.handleClearCacheMessage = handleClearCacheMessage;
 app.whenReady().then(async () => {
   console.log('Starting Twitch Redeem Overlay application...');
   
-  // Try to load Redis config
-  const redisConfig = loadRedisConfig();
+  // Initialize Twitch module
+  initializeTwitchModule();
   
-  if (redisConfig) {
-    // Try to connect with saved config
-    const success = await initRedisClient(
-      redisConfig, 
-      handleRedisMessage, 
-      handleClearCacheMessage
-    );
-    
-    if (!success) {
-      // If connection failed, show Redis connection dialog
-      showRedisConnectionDialog(() => showMonitorSelectionDialog(createOverlay));
-    } else {
-      // If Redis connection was successful, show monitor selection dialog
-      showMonitorSelectionDialog(createOverlay);
-    }
-  } else {
-    // No Redis config found, show connection dialog
-    showRedisConnectionDialog(() => showMonitorSelectionDialog(createOverlay));
-  }
+  // Try to load Redis config
+  //const redisConfig = loadRedisConfig();
+  //
+  //if (redisConfig) {
+  //  // Try to connect with saved config
+  //  const success = await initRedisClient(
+  //    redisConfig, 
+  //    handleRedisMessage, 
+  //    handleClearCacheMessage
+  //  );
+  //  
+  //  if (!success) {
+  //    // If connection failed, show Redis connection dialog
+  //    showRedisConnectionDialog(() => showMonitorSelectionDialog(createOverlay));
+  //  } else {
+  //    // If Redis connection was successful, show monitor selection dialog
+  //    showMonitorSelectionDialog(createOverlay);
+  //  }
+  //} else {
+  //  // No Redis config found, show connection dialog
+  //  showRedisConnectionDialog(() => showMonitorSelectionDialog(createOverlay));
+  //}
+
+  showMonitorSelectionDialog(createOverlay);
   
   // Handle application activation (macOS)
   app.on('activate', function () {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      const redisConfig = loadRedisConfig();
-      if (redisConfig) {
-        initRedisClient(
-          redisConfig, 
-          handleRedisMessage, 
-          handleClearCacheMessage
-        ).then(success => {
-          if (success) {
-            showMonitorSelectionDialog(createOverlay);
-          } else {
-            showRedisConnectionDialog(() => showMonitorSelectionDialog(createOverlay));
-          }
-        });
-      } else {
-        showRedisConnectionDialog(() => showMonitorSelectionDialog(createOverlay));
-      }
-    }
+    showMonitorSelectionDialog(createOverlay);
+    //if (BrowserWindow.getAllWindows().length === 0) {
+    //  const redisConfig = loadRedisConfig();
+    //  if (redisConfig) {
+    //    initRedisClient(
+    //      redisConfig, 
+    //      handleRedisMessage, 
+    //      handleClearCacheMessage
+    //    ).then(success => {
+    //      if (success) {
+    //        showMonitorSelectionDialog(createOverlay);
+    //      } else {
+    //        showRedisConnectionDialog(() => showMonitorSelectionDialog(createOverlay));
+    //      }
+    //    });
+    //  } else {
+    //    showRedisConnectionDialog(() => showMonitorSelectionDialog(createOverlay));
+    //  }
+    //}
   });
 });
 

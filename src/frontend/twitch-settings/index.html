@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Twitch Settings</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #18181b;
+      color: #efeff1;
+      margin: 0;
+      padding: 20px;
+    }
+    .container {
+      max-width: 550px;
+      margin: 0 auto;
+    }
+    h1, h2, h3 {
+      color: #9147ff;
+    }
+    .card {
+      background-color: #26262c;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+    }
+    .auth-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+      text-align: center;
+    }
+    .status {
+      margin: 10px 0;
+      padding: 10px;
+      border-radius: 4px;
+    }
+    .status-connected {
+      background-color: rgba(0, 180, 0, 0.2);
+      color: #00ff00;
+    }
+    .status-disconnected {
+      background-color: rgba(180, 0, 0, 0.2);
+      color: #ff6b6b;
+    }
+    .user-info {
+      margin: 15px 0;
+      padding: 10px;
+      background-color: #3a3a3d;
+      border-radius: 4px;
+      text-align: left;
+    }
+    .button {
+      background-color: #9147ff;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      margin: 10px 0;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: background-color 0.2s;
+    }
+    .button:hover {
+      background-color: #772ce8;
+    }
+    .button:disabled {
+      background-color: #6441a5;
+      cursor: not-allowed;
+      opacity: 0.7;
+    }
+    .button-danger {
+      background-color: #eb0400;
+    }
+    .button-danger:hover {
+      background-color: #c41e3a;
+    }
+    input[type="text"], input[type="url"] {
+      padding: 10px;
+      margin: 10px 0;
+      width: 100%;
+      border-radius: 4px;
+      border: 1px solid #3a3a3d;
+      background-color: #18181b;
+      color: #efeff1;
+      box-sizing: border-box;
+    }
+    input[type="checkbox"] {
+      margin-right: 8px;
+    }
+    label {
+      display: block;
+      margin: 10px 0;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    .hidden {
+      display: none;
+    }
+    .channel-section, .reward-section {
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid #3a3a3d;
+    }
+    .notification {
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 4px;
+    }
+    .notification-success {
+      background-color: rgba(0, 180, 0, 0.2);
+      color: #00ff00;
+    }
+    .notification-error {
+      background-color: rgba(180, 0, 0, 0.2);
+      color: #ff6b6b;
+    }
+    /* Additional styles for rewards list and modal */
+    .rewards-container {
+      max-height: 300px;
+      overflow-y: auto;
+      margin-top: 15px;
+      border: 1px solid #3a3a3d;
+      border-radius: 4px;
+      background-color: #1f1f23;
+    }
+    
+    .reward-item {
+      padding: 10px 15px;
+      border-bottom: 1px solid #3a3a3d;
+      display: flex;
+      align-items: center;
+      transition: background-color 0.2s;
+    }
+    
+    .reward-item:last-child {
+      border-bottom: none;
+    }
+    
+    .reward-item:hover {
+      background-color: #26262c;
+    }
+    
+    .reward-icon {
+      width: 32px;
+      height: 32px;
+      background-color: #9147ff;
+      border-radius: 4px;
+      margin-right: 12px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .reward-info {
+      flex-grow: 1;
+    }
+    
+    .reward-title {
+      font-weight: bold;
+      margin: 0 0 5px;
+    }
+    
+    .reward-cost {
+      font-size: 12px;
+      color: #adadb8;
+    }
+    
+    .reward-actions {
+      margin-left: 10px;
+    }
+    
+    .button-small {
+      padding: 5px 10px;
+      font-size: 12px;
+    }
+    
+    .button-edit {
+      background-color: #2f2f35;
+      color: #efeff1;
+    }
+    
+    .button-edit:hover {
+      background-color: #3a3a3d;
+    }
+    
+    .configured-badge {
+      background-color: #00a65a;
+      color: white;
+      padding: 2px 6px;
+      border-radius: 10px;
+      font-size: 10px;
+      margin-left: 8px;
+    }
+    
+    .loading-indicator {
+      text-align: center;
+      padding: 15px;
+      color: #adadb8;
+    }
+    
+    .empty-state {
+      text-align: center;
+      padding: 20px;
+      color: #adadb8;
+    }
+    
+    .rewards-controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    
+    .small-text {
+      font-size: 12px;
+      color: #adadb8;
+      margin: 3px 0;
+    }
+    
+    /* Modal styles */
+    .modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    
+    .modal-content {
+      background-color: #18181b;
+      width: 500px;
+      max-width: 90%;
+      border-radius: 8px;
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+    }
+    
+    .modal-header {
+      padding: 15px;
+      border-bottom: 1px solid #3a3a3d;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .modal-body {
+      padding: 20px;
+      max-height: 500px;
+      overflow-y: auto;
+    }
+    
+    .modal-footer {
+      padding: 15px;
+      border-top: 1px solid #3a3a3d;
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+    
+    .close-modal {
+      font-size: 24px;
+      cursor: pointer;
+      color: #adadb8;
+    }
+    
+    .close-modal:hover {
+      color: white;
+    }
+    
+    .form-group-row {
+      display: flex;
+      gap: 15px;
+    }
+    
+    .form-group-row > .form-group {
+      flex: 1;
+    }
+    
+    .select-input {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #3a3a3d;
+      border-radius: 4px;
+      background-color: #18181b;
+      color: #efeff1;
+    }
+    
+    .media-preview {
+      width: 100%;
+      height: 150px;
+      border: 1px solid #3a3a3d;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-color: #0e0e10;
+      color: #adadb8;
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+    }
+    
+    .media-preview img, .media-preview video {
+      max-width: 100%;
+      max-height: 100%;
+    }
+    
+    .preview-placeholder {
+      text-align: center;
+      padding: 20px;
+    }
+    
+    /* Hide modal by default */
+    .hidden {
+      display: none !important;
+    }
+
+    .button-test {
+      background-color: #005f99;
+      color: #efeff1;
+      margin-right: 5px;
+    }
+    
+    .button-test:hover {
+      background-color: #0078c2;
+    }
+
+    .file-input-container {
+      display: flex;
+      width: 100%;
+      gap: 5px;
+    }
+    
+    .file-input-container input {
+      flex: 1;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Twitch Integration Settings</h1>
+    
+    <div class="card auth-section">
+      <h2>Authentication</h2>
+      
+      <!-- Auth status will be shown here -->
+      <div id="auth-status" class="status status-disconnected">
+        You are not connected to Twitch
+      </div>
+      
+      <!-- User info will be shown here when logged in -->
+      <div id="user-info" class="user-info hidden">
+        <p><strong>Logged in as:</strong> <span id="username"></span></p>
+      </div>
+      
+      <!-- Log in/out buttons -->
+      <button id="login-button" class="button">Log in with Twitch</button>
+      <button id="logout-button" class="button button-danger hidden">Log out</button>
+    </div>
+    
+    <!-- Channel settings -->
+    <div id="channel-settings" class="card hidden">
+      <h2>Channel Settings</h2>
+      
+      <div id="channel-status" class="form-group">
+        <p>Current channel: <strong id="current-channel">None</strong></p>
+        <p><small>Due to Twitch API restrictions, only your own channel can be monitored for redemptions.</small></p>
+      </div>
+      
+      <div class="form-group">
+        <button id="refresh-channel" class="button">Refresh Channel Data</button>
+      </div>
+      
+      <div id="channel-notification" class="notification hidden"></div>
+    </div>
+    
+    <!-- Reward settings -->
+    <div id="reward-settings" class="card hidden">
+      <h2>Reward Tracking Settings</h2>
+      
+      <div class="form-group">
+        <label>
+          <input type="checkbox" id="enable-tracking" />
+          Enable channel point reward tracking
+        </label>
+        <p><small>When enabled, the app will listen for channel point redemptions</small></p>
+      </div>
+      
+      <div id="reward-status" class="status hidden"></div>
+      
+      <!-- Rewards List Section -->
+      <div class="reward-list-section">
+        <h3>Active Rewards</h3>
+        <p><small>Only configured rewards will trigger actions when redeemed</small></p>
+        
+        <div class="rewards-controls">
+          <button id="refresh-rewards-btn" class="button button-small">Refresh Rewards</button>
+          <div id="last-refresh-info" class="small-text">Last refreshed: Never</div>
+        </div>
+        
+        <div id="rewards-loading" class="loading-indicator hidden">Loading rewards...</div>
+        
+        <div id="rewards-list" class="rewards-container">
+          <!-- Rewards will be inserted here dynamically -->
+          <div class="empty-state">No rewards found. Click "Refresh Rewards" to load your channel rewards.</div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Reward Configuration Modal -->
+    <div id="reward-config-modal" class="modal hidden">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 id="config-reward-title">Configure Reward</h3>
+          <span class="close-modal">&times;</span>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="media-type">Media Type:</label>
+            <select id="media-type" class="select-input">
+              <option value="image">Image</option>
+              <option value="gif">GIF</option>
+              <option value="video">Video</option>
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <label for="media-path">Media File Path:</label>
+            <div class="file-input-container">
+              <input type="text" id="media-path" placeholder="Select a local media file" readonly />
+              <button id="browse-media-btn" class="button button-small">Browse</button>
+            </div>
+            <p class="small-text">Path to a local image, GIF, or video file</p>
+          </div>
+          
+          <div class="form-group-row">
+            <div class="form-group">
+              <label for="position-x">X Position:</label>
+              <input type="number" id="position-x" placeholder="0" value="0" />
+            </div>
+            <div class="form-group">
+              <label for="position-y">Y Position:</label>
+              <input type="number" id="position-y" placeholder="0" value="0" />
+            </div>
+          </div>
+          
+          <div class="form-group-row">
+            <div class="form-group">
+              <label for="media-width">Width:</label>
+              <input type="number" id="media-width" placeholder="Auto" />
+              <p class="small-text">Leave empty for auto</p>
+            </div>
+            <div class="form-group">
+              <label for="media-height">Height:</label>
+              <input type="number" id="media-height" placeholder="Auto" />
+              <p class="small-text">Leave empty for auto</p>
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label for="duration">Duration (ms):</label>
+            <input type="number" id="duration" placeholder="5000" value="5000" />
+            <p class="small-text">How long to display the media (in milliseconds)</p>
+          </div>
+          
+          <div class="form-group">
+            <label for="chroma-key">Chroma Key:</label>
+            <input type="text" id="chroma-key" placeholder="#00ff00" />
+            <p class="small-text">Color to make transparent (e.g., #00ff00 for green)</p>
+          </div>
+          
+          <div class="form-group">
+            <label>Preview:</label>
+            <div id="media-preview" class="media-preview">
+              <div class="preview-placeholder">Media preview will appear here</div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="delete-config-btn" class="button button-danger">Delete</button>
+          <button id="save-config-btn" class="button">Save Configuration</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Wait for DOM to load
+    document.addEventListener('DOMContentLoaded', () => {
+      // Elements
+      const authStatusEl = document.getElementById('auth-status');
+      const userInfoEl = document.getElementById('user-info');
+      const usernameEl = document.getElementById('username');
+      const loginButton = document.getElementById('login-button');
+      const logoutButton = document.getElementById('logout-button');
+      const channelSettings = document.getElementById('channel-settings');
+      const currentChannelEl = document.getElementById('current-channel');
+      const refreshChannelButton = document.getElementById('refresh-channel');
+      const channelNotificationEl = document.getElementById('channel-notification');
+      const rewardSettings = document.getElementById('reward-settings');
+      const enableTrackingCheckbox = document.getElementById('enable-tracking');
+      const rewardStatusEl = document.getElementById('reward-status');
+      
+      // Rewards elements
+      const rewardsList = document.getElementById('rewards-list');
+      const refreshRewardsBtn = document.getElementById('refresh-rewards-btn');
+      const lastRefreshInfo = document.getElementById('last-refresh-info');
+      const rewardsLoadingEl = document.getElementById('rewards-loading');
+      
+      // Modal elements
+      const rewardConfigModal = document.getElementById('reward-config-modal');
+      const configRewardTitle = document.getElementById('config-reward-title');
+      const closeModalBtn = document.querySelector('.close-modal');
+      const saveConfigBtn = document.getElementById('save-config-btn');
+      const deleteConfigBtn = document.getElementById('delete-config-btn');
+      
+      // Form elements
+      const mediaTypeSelect = document.getElementById('media-type');
+      const mediaPathInput = document.getElementById('media-path');
+      const browseMediaBtn = document.getElementById('browse-media-btn');
+      const positionXInput = document.getElementById('position-x');
+      const positionYInput = document.getElementById('position-y');
+      const mediaWidthInput = document.getElementById('media-width');
+      const mediaHeightInput = document.getElementById('media-height');
+      const durationInput = document.getElementById('duration');
+      const chromaKeyInput = document.getElementById('chroma-key');
+      const mediaPreview = document.getElementById('media-preview');
+      
+      // Current reward being configured
+      let currentReward = null;
+      
+      // All rewards data
+      let rewardsData = [];
+      
+      // Handle login button click
+      loginButton.addEventListener('click', () => {
+        window.twitchAPI.login();
+      });
+      
+      // Handle logout button click
+      logoutButton.addEventListener('click', () => {
+        window.twitchAPI.logout();
+      });
+      
+      // Handle refresh channel button click
+      refreshChannelButton.addEventListener('click', () => {
+        // Use the authenticated user's channel automatically
+        window.twitchAPI.refreshOwnChannel();
+        showChannelNotification('Refreshing channel data...', true);
+      });
+      
+      // Handle tracking checkbox change
+      enableTrackingCheckbox.addEventListener('change', () => {
+        window.twitchAPI.toggleRewardPolling(enableTrackingCheckbox.checked);
+      });
+      
+      // Handle refresh rewards button click
+      refreshRewardsBtn.addEventListener('click', () => {
+        refreshRewards();
+      });
+      
+      // Close modal button handler
+      closeModalBtn.addEventListener('click', () => {
+        hideConfigModal();
+      });
+      
+      // Save config button handler
+      saveConfigBtn.addEventListener('click', () => {
+        saveRewardConfig();
+      });
+      
+      // Delete config button handler
+      deleteConfigBtn.addEventListener('click', () => {
+        deleteRewardConfig();
+      });
+      
+      // Media path input change handler (for preview)
+      mediaPathInput.addEventListener('input', updateMediaPreview);
+      mediaTypeSelect.addEventListener('change', updateMediaPreview);
+      
+      // Browse media button click handler
+      browseMediaBtn.addEventListener('click', () => {
+        window.twitchAPI.browseMediaFile((filePath) => {
+          mediaPathInput.value = filePath;
+          updateMediaPreview();
+        });
+      });
+      
+      // Listen for auth status updates from the main process
+      window.twitchAPI.onAuthStatusUpdate((data) => {
+        if (data.isAuthenticated) {
+          // Update UI for authenticated state
+          authStatusEl.textContent = 'Connected to Twitch';
+          authStatusEl.className = 'status status-connected';
+          
+          // Show user info
+          userInfoEl.classList.remove('hidden');
+          usernameEl.textContent = data.userName;
+          
+          // Show logout button, hide login button
+          loginButton.classList.add('hidden');
+          logoutButton.classList.remove('hidden');
+          
+          // Show channel and reward settings
+          channelSettings.classList.remove('hidden');
+          rewardSettings.classList.remove('hidden');
+          
+          // Update channel info if available
+          if (data.channelName) {
+            currentChannelEl.textContent = data.channelName;
+            
+            // Load rewards list
+            window.twitchAPI.getRewardsList();
+          }
+          
+          // Update tracking checkbox
+          enableTrackingCheckbox.checked = data.isPollingRewards;
+          updateRewardTrackingStatus(data.isPollingRewards);
+          
+        } else {
+          // Update UI for unauthenticated state
+          authStatusEl.textContent = 'You are not connected to Twitch';
+          authStatusEl.className = 'status status-disconnected';
+          
+          // Hide user info
+          userInfoEl.classList.add('hidden');
+          
+          // Show login button, hide logout button
+          loginButton.classList.remove('hidden');
+          logoutButton.classList.add('hidden');
+          
+          // Hide channel and reward settings
+          channelSettings.classList.add('hidden');
+          rewardSettings.classList.add('hidden');
+        }
+      });
+      
+      // Listen for channel setup results
+      window.twitchAPI.onChannelSetupResult((result) => {
+        if (result.success) {
+          showChannelNotification(`Successfully set up channel: ${result.channelName}`, true);
+          currentChannelEl.textContent = result.channelName;
+          
+          // Refresh rewards list after successful channel setup
+          refreshRewards();
+        } else {
+          showChannelNotification(`Error: ${result.error}`, false);
+        }
+      });
+      
+      // Listen for polling status changes
+      window.twitchAPI.onPollingStatusChange((data) => {
+        enableTrackingCheckbox.checked = data.isPolling;
+        updateRewardTrackingStatus(data.isPolling);
+      });
+      
+      // Listen for rewards updates
+      window.twitchAPI.onRewardsUpdated((rewards) => {
+        rewardsData = rewards;
+        renderRewardsList();
+      });
+      
+      // Listen for rewards errors
+      window.twitchAPI.onRewardsError((error) => {
+        rewardsLoadingEl.classList.add('hidden');
+        rewardsList.innerHTML = `<div class="empty-state">Error fetching rewards: ${error.error}</div>`;
+      });
+      
+      // Function to refresh rewards list
+      function refreshRewards() {
+        rewardsLoadingEl.classList.remove('hidden');
+        rewardsList.innerHTML = '';
+        window.twitchAPI.getRewardsList();
+        lastRefreshInfo.textContent = `Last refreshed: ${new Date().toLocaleTimeString()}`;
+      }
+      
+      // Render the rewards list
+      function renderRewardsList() {
+        rewardsLoadingEl.classList.add('hidden');
+        
+        if (!rewardsData || rewardsData.length === 0) {
+          rewardsList.innerHTML = '<div class="empty-state">No rewards found for your channel.</div>';
+          return;
+        }
+        
+        // Clear previous content
+        rewardsList.innerHTML = '';
+        
+        // Add each reward
+        rewardsData.forEach(reward => {
+          const rewardEl = document.createElement('div');
+          rewardEl.className = 'reward-item';
+          
+          // Create icon
+          const iconEl = document.createElement('div');
+          iconEl.className = 'reward-icon';
+          iconEl.textContent = reward.title.charAt(0);
+          
+          // Create info section
+          const infoEl = document.createElement('div');
+          infoEl.className = 'reward-info';
+          
+          const titleEl = document.createElement('p');
+          titleEl.className = 'reward-title';
+          titleEl.textContent = reward.title;
+          
+          // Add configured badge if this reward is configured
+          if (reward.isConfigured) {
+            const configuredBadge = document.createElement('span');
+            configuredBadge.className = 'configured-badge';
+            configuredBadge.textContent = 'Configured';
+            titleEl.appendChild(configuredBadge);
+          }
+          
+          const costEl = document.createElement('p');
+          costEl.className = 'reward-cost';
+          costEl.textContent = `${reward.cost} points`;
+          
+          infoEl.appendChild(titleEl);
+          infoEl.appendChild(costEl);
+          
+          // Create actions section
+          const actionsEl = document.createElement('div');
+          actionsEl.className = 'reward-actions';
+          
+          const editBtn = document.createElement('button');
+          editBtn.className = 'button button-small button-edit';
+          editBtn.textContent = reward.isConfigured ? 'Edit' : 'Configure';
+          editBtn.addEventListener('click', () => {
+            openConfigModal(reward);
+          });
+          
+          // Add Test button for configured rewards
+          if (reward.isConfigured) {
+            const testBtn = document.createElement('button');
+            testBtn.className = 'button button-small button-test';
+            testBtn.textContent = 'Test';
+            testBtn.title = 'Test this reward without redeeming it';
+            testBtn.addEventListener('click', () => {
+              testRewardConfig(reward);
+            });
+            actionsEl.appendChild(testBtn);
+          }
+          
+          actionsEl.appendChild(editBtn);
+          
+          // Add everything to reward item
+          rewardEl.appendChild(iconEl);
+          rewardEl.appendChild(infoEl);
+          rewardEl.appendChild(actionsEl);
+          
+          // Add to list
+          rewardsList.appendChild(rewardEl);
+        });
+      }
+      
+      // Open config modal for a reward
+      function openConfigModal(reward) {
+        currentReward = reward;
+        configRewardTitle.textContent = `Configure: ${reward.title}`;
+        
+        // Reset form
+        mediaTypeSelect.value = 'image';
+        mediaPathInput.value = '';
+        positionXInput.value = 0;
+        positionYInput.value = 0;
+        mediaWidthInput.value = '';
+        mediaHeightInput.value = '';
+        durationInput.value = 5000;
+        chromaKeyInput.value = '';
+        
+        // Fill with existing data if configured
+        if (reward.isConfigured && reward.config) {
+          const config = reward.config;
+          mediaTypeSelect.value = config.type || 'image';
+          mediaPathInput.value = config.path || '';
+          positionXInput.value = config.x || 0;
+          positionYInput.value = config.y || 0;
+          mediaWidthInput.value = config.width || '';
+          mediaHeightInput.value = config.height || '';
+          durationInput.value = config.duration || 5000;
+          chromaKeyInput.value = config.chromaKey || '';
+          
+          // Update preview
+          updateMediaPreview();
+        } else {
+          // Clear preview
+          mediaPreview.innerHTML = '<div class="preview-placeholder">Media preview will appear here</div>';
+        }
+        
+        // Show/hide delete button based on whether reward is configured
+        deleteConfigBtn.style.display = reward.isConfigured ? 'block' : 'none';
+        
+        // Show modal
+        rewardConfigModal.classList.remove('hidden');
+      }
+      
+      // Hide config modal
+      function hideConfigModal() {
+        rewardConfigModal.classList.add('hidden');
+        currentReward = null;
+      }
+      
+      // Save reward configuration
+      function saveRewardConfig() {
+        if (!currentReward) return;
+        
+        // Collect form data
+        const config = {
+          type: mediaTypeSelect.value,
+          path: mediaPathInput.value,
+          x: parseInt(positionXInput.value, 10) || 0,
+          y: parseInt(positionYInput.value, 10) || 0,
+          width: mediaWidthInput.value ? parseInt(mediaWidthInput.value, 10) : undefined,
+          height: mediaHeightInput.value ? parseInt(mediaHeightInput.value, 10) : undefined,
+          duration: parseInt(durationInput.value, 10) || 5000,
+          chromaKey: chromaKeyInput.value || undefined
+        };
+        
+        // Validate URL
+        if (!config.path) {
+          alert('Please enter a valid media URL');
+          return;
+        }
+        
+        // Save config
+        window.twitchAPI.saveRewardConfig(currentReward.id, config);
+        
+        // Hide modal
+        hideConfigModal();
+      }
+      
+      // Delete reward configuration
+      function deleteRewardConfig() {
+        if (!currentReward || !currentReward.isConfigured) return;
+        
+        // Confirm deletion
+        if (confirm(`Are you sure you want to remove the configuration for "${currentReward.title}"?`)) {
+          window.twitchAPI.deleteRewardConfig(currentReward.id);
+          hideConfigModal();
+        }
+      }
+      
+      // Update media preview
+      function updateMediaPreview() {
+        const url = mediaPathInput.value;
+        const type = mediaTypeSelect.value;
+        
+        if (!url) {
+          mediaPreview.innerHTML = '<div class="preview-placeholder">Media preview will appear here</div>';
+          return;
+        }
+        
+        mediaPreview.innerHTML = '';
+        
+        try {
+          if (type === 'video') {
+            const video = document.createElement('video');
+            video.src = url;
+            video.controls = true;
+            video.muted = true;
+            video.style.maxWidth = '100%';
+            video.style.maxHeight = '100%';
+            mediaPreview.appendChild(video);
+          } else {
+            // Image or GIF
+            const img = document.createElement('img');
+            img.src = url;
+            img.onerror = () => {
+              mediaPreview.innerHTML = '<div class="preview-placeholder">Failed to load media</div>';
+            };
+            mediaPreview.appendChild(img);
+          }
+        } catch (error) {
+          mediaPreview.innerHTML = '<div class="preview-placeholder">Error loading preview</div>';
+        }
+      }
+      
+      // Helper function to show channel notifications
+      function showChannelNotification(message, isSuccess) {
+        channelNotificationEl.textContent = message;
+        channelNotificationEl.className = isSuccess 
+          ? 'notification notification-success' 
+          : 'notification notification-error';
+        
+        channelNotificationEl.classList.remove('hidden');
+        
+        // Auto-hide after 5 seconds
+        setTimeout(() => {
+          channelNotificationEl.classList.add('hidden');
+        }, 5000);
+      }
+      
+      // Helper function to update reward tracking status
+      function updateRewardTrackingStatus(isTracking) {
+        rewardStatusEl.classList.remove('hidden');
+        
+        if (isTracking) {
+          rewardStatusEl.textContent = 'Reward tracking is active';
+          rewardStatusEl.className = 'status status-connected';
+        } else {
+          rewardStatusEl.textContent = 'Reward tracking is disabled';
+          rewardStatusEl.className = 'status status-disconnected';
+        }
+      }
+      
+      // Test reward configuration
+      function testRewardConfig(reward) {
+        if (!reward || !reward.isConfigured) return;
+        
+        // Send test event
+        window.twitchAPI.testReward(reward);
+        
+        // Show mini notification
+        const testNotification = document.createElement('div');
+        testNotification.className = 'notification notification-success';
+        testNotification.textContent = `Testing "${reward.title}" reward...`;
+        testNotification.style.position = 'fixed';
+        testNotification.style.bottom = '20px';
+        testNotification.style.right = '20px';
+        testNotification.style.zIndex = '9999';
+        
+        document.body.appendChild(testNotification);
+        
+        // Auto-remove the notification after 3 seconds
+        setTimeout(() => {
+          if (testNotification.parentNode) {
+            testNotification.parentNode.removeChild(testNotification);
+          }
+        }, 3000);
+      }
+    });
+  </script>
+</body>
+</html>

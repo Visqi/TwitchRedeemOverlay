@@ -35,3 +35,4 @@ yarn.lock
 dist/
 .vscode/
 out/
+.env
