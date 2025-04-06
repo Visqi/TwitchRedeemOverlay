@@ -161,26 +161,6 @@ function createSystemTray() {
         showTwitchSettingsWindow();
       }
     },
-    {
-      label: 'Settings',
-      click: () => {
-        // Create a proper settings window using the same approach as Twitch settings
-        const settingsWindow = new BrowserWindow({
-          width: 600,
-          height: 700,
-          webPreferences: {
-            preload: path.join(__dirname, '..', 'shared', 'twitch-settings-preload', 'index.js'),
-            nodeIntegration: false,
-            contextIsolation: true
-          },
-          title: 'Twitch Settings',
-          autoHideMenuBar: true
-        });
-        
-        // Load the settings page from the frontend folder
-        settingsWindow.loadFile(path.join(__dirname, '..', 'frontend', 'twitch-settings', 'index.html'));
-      }
-    },
     { type: 'separator' },
     {
       label: 'Exit',
