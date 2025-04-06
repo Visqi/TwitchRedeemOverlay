@@ -5,12 +5,17 @@
   "main": "src/backend/index.js",
   "type": "module",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "build": "electron-builder",
+    "build:win": "electron-builder --win portable",
+    "build:mac": "electron-builder --mac dir",
+    "build:linux": "electron-builder --linux AppImage"
   },
   "author": "Visqi",
   "license": "MIT",
   "devDependencies": {
-    "electron": "^35.1.4"
+    "electron": "^35.1.4",
+    "electron-builder": "^24.9.1"
   },
   "dependencies": {
     "crypto-js": "^4.2.0",
@@ -18,5 +23,44 @@
     "fs-extra": "^11.3.0",
     "node-fetch": "^2.7.0",
     "redis": "^4.7.0"
+  },
+  "build": {
+    "appId": "com.visqi.twitchredeemoverlay",
+    "productName": "TwitchRedeemOverlay",
+    "asar": true,
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "src/assets/app-icon.ico"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dir",
+          "arch": ["x64", "arm64"]
+        }
+      ],
+      "icon": "src/assets/app-icon.icns"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "icon": "src/assets/app-icon.png"
+    },
+    "portable": {
+      "artifactName": "TwitchRedeemOverlay-Portable.exe"
+    }
   }
 }
