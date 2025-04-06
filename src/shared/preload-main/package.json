@@ -1,0 +1,6 @@
+{
+  "name": "preload-main",
+  "version": "1.0.0",
+  "type": "commonjs",
+  "private": true
+}

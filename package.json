@@ -1,0 +1,22 @@
+{
+  "name": "twitchredeemoverlay",
+  "version": "1.0.0",
+  "description": "Twitch Point Redeem Overlay",
+  "main": "src/backend/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "electron ."
+  },
+  "author": "Visqi",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^35.1.4"
+  },
+  "dependencies": {
+    "crypto-js": "^4.2.0",
+    "electron-store": "^10.0.1",
+    "fs-extra": "^11.3.0",
+    "node-fetch": "^2.7.0",
+    "redis": "^4.7.0"
+  }
+}

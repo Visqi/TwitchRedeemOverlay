@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Redis Connection Setup</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background-color: #f5f5f5;
+      color: #333;
+    }
+
+    h1 {
+      color: #6441a5;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .connection-form {
+      background-color: white;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      max-width: 500px;
+      margin: 0 auto;
+    }
+
+    .form-group {
+      margin-bottom: 15px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      box-sizing: border-box;
+    }
+
+    .button-group {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 25px;
+    }
+
+    button {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: background-color 0.2s;
+    }
+
+    .save-btn {
+      background-color: #6441a5;
+      color: white;
+    }
+
+    .save-btn:hover {
+      background-color: #7d5bbe;
+    }
+
+    .test-btn {
+      background-color: #e7e7e7;
+      color: #333;
+    }
+
+    .test-btn:hover {
+      background-color: #d8d8d8;
+    }
+
+    .status {
+      margin-top: 20px;
+      padding: 10px;
+      border-radius: 4px;
+      text-align: center;
+    }
+
+    .status.connecting {
+      background-color: #fff8e1;
+      color: #856404;
+    }
+
+    .status.success {
+      background-color: #d4edda;
+      color: #155724;
+    }
+
+    .status.error {
+      background-color: #f8d7da;
+      color: #721c24;
+    }
+
+    .redis-icon {
+      text-align: center;
+      font-size: 48px;
+      margin-bottom: 15px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Redis Connection Setup</h1>
+  
+  <div class="connection-form">
+    <div class="redis-icon">🗄️</div>
+    
+    <div id="status-message" class="status" style="display: none;"></div>
+    
+    <div class="form-group">
+      <label for="host">Host:</label>
+      <input type="text" id="host" placeholder="localhost">
+    </div>
+    
+    <div class="form-group">
+      <label for="port">Port:</label>
+      <input type="number" id="port" placeholder="6379">
+    </div>
+    
+    <div class="form-group">
+      <label for="username">Username (optional):</label>
+      <input type="text" id="username" placeholder="Leave empty for no username">
+    </div>
+    
+    <div class="form-group">
+      <label for="password">Password (optional):</label>
+      <input type="password" id="password" placeholder="Leave empty for no password">
+    </div>
+    
+    <div class="form-group">
+      <label for="database">Database:</label>
+      <input type="number" id="database" placeholder="0" min="0" value="0">
+    </div>
+    
+    <div class="form-group">
+      <label>
+        <input type="checkbox" id="ssl">
+        Use SSL/TLS
+      </label>
+    </div>
+    
+    <div class="button-group">
+      <button class="test-btn" id="test-connection">Test Connection</button>
+      <button class="save-btn" id="save-connection">Save & Connect</button>
+    </div>
+  </div>
+
+  <script>
+    // Check if window.electron is available
+    if (!window.electron) {
+      console.error("Error: window.electron is not defined. Preload script may not be working correctly.");
+      const statusEl = document.getElementById('status-message');
+      statusEl.style.display = 'block';
+      statusEl.className = 'status error';
+      statusEl.textContent = 'Error: IPC bridge not available. Please restart the application.';
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      console.log("DOM content loaded, setting up Redis connection form");
+      
+      // Load saved values from main process
+      if (window.electron && window.electron.receive) {
+        console.log("Setting up listener for load-redis-config");
+        window.electron.receive('load-redis-config', (config) => {
+          console.log("Received Redis config:", config);
+          if (config) {
+            document.getElementById('host').value = config.host || '';
+            document.getElementById('port').value = config.port || '6379';
+            document.getElementById('username').value = config.username || '';
+            document.getElementById('password').value = config.password || '';
+            document.getElementById('database').value = config.database || '0';
+            document.getElementById('ssl').checked = config.ssl || false;
+          }
+        });
+
+        // Handle connection status updates
+        console.log("Setting up listener for redis-connection-status");
+        window.electron.receive('redis-connection-status', (status) => {
+          console.log("Received Redis connection status:", status);
+          const statusEl = document.getElementById('status-message');
+          statusEl.style.display = 'block';
+          
+          statusEl.className = 'status';
+          if (status.connecting) {
+            statusEl.classList.add('connecting');
+            statusEl.textContent = 'Connecting to Redis...';
+          } else if (status.success) {
+            statusEl.classList.add('success');
+            statusEl.textContent = 'Successfully connected to Redis!';
+          } else if (status.error) {
+            statusEl.classList.add('error');
+            statusEl.textContent = `Connection failed: ${status.error}`;
+          }
+        });
+      } else {
+        console.error("Error: window.electron.receive is not defined");
+      }
+
+      // Test connection button
+      const testBtn = document.getElementById('test-connection');
+      testBtn.addEventListener('click', () => {
+        console.log("Test connection button clicked");
+        const config = getFormValues();
+        console.log("Form values:", config);
+        
+        try {
+          if (window.electron && window.electron.testRedisConnection) {
+            console.log("Calling testRedisConnection");
+            window.electron.testRedisConnection(config);
+          } else {
+            console.error("Error: testRedisConnection is not available");
+            showError("IPC bridge error: Test connection function not available");
+          }
+        } catch (err) {
+          console.error("Error calling testRedisConnection:", err);
+          showError(`Error: ${err.message}`);
+        }
+      });
+
+      // Save connection button
+      const saveBtn = document.getElementById('save-connection');
+      saveBtn.addEventListener('click', () => {
+        console.log("Save connection button clicked");
+        const config = getFormValues();
+        console.log("Form values:", config);
+        
+        try {
+          if (window.electron && window.electron.saveRedisConnection) {
+            console.log("Calling saveRedisConnection");
+            window.electron.saveRedisConnection(config);
+          } else {
+            console.error("Error: saveRedisConnection is not available");
+            showError("IPC bridge error: Save connection function not available");
+          }
+        } catch (err) {
+          console.error("Error calling saveRedisConnection:", err);
+          showError(`Error: ${err.message}`);
+        }
+      });
+
+      // Helper to get form values
+      function getFormValues() {
+        return {
+          host: document.getElementById('host').value || 'localhost',
+          port: parseInt(document.getElementById('port').value || '6379', 10),
+          username: document.getElementById('username').value || undefined,
+          password: document.getElementById('password').value || undefined,
+          database: parseInt(document.getElementById('database').value || '0', 10),
+          ssl: document.getElementById('ssl').checked
+        };
+      }
+      
+      // Helper to show error messages
+      function showError(message) {
+        const statusEl = document.getElementById('status-message');
+        statusEl.style.display = 'block';
+        statusEl.className = 'status error';
+        statusEl.textContent = message;
+      }
+    });
+  </script>
+</body>
+</html>

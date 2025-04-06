@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Monitor Selection</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f5f5f5;
+      margin: 0;
+      padding: 20px;
+      color: #333;
+    }
+    
+    h1 {
+      color: #6441a5;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    
+    .monitors-container {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    
+    .monitor-option {
+      background-color: #fff;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      padding: 15px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    
+    .monitor-option:hover {
+      border-color: #6441a5;
+      transform: translateY(-2px);
+      box-shadow: 0 5px 10px rgba(0, 0, 0, 0.1);
+    }
+    
+    .monitor-icon {
+      width: 70px;
+      height: 50px;
+      background-color: #333;
+      border-radius: 4px;
+      margin-right: 15px;
+      position: relative;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: white;
+      font-weight: bold;
+      font-size: 16px;
+    }
+    
+    .monitor-details {
+      flex-grow: 1;
+    }
+    
+    .monitor-name {
+      font-weight: bold;
+      font-size: 16px;
+      margin-bottom: 5px;
+    }
+    
+    .monitor-resolution {
+      color: #666;
+      font-size: 14px;
+    }
+    
+    .primary-badge {
+      background-color: #4CAF50;
+      color: white;
+      border-radius: 12px;
+      padding: 3px 8px;
+      font-size: 12px;
+      margin-left: 10px;
+      font-weight: normal;
+    }
+    
+    .instructions {
+      text-align: center;
+      margin-top: 10px;
+      margin-bottom: 20px;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <h1>Select Monitor for Overlay</h1>
+  
+  <div class="instructions">
+    Please select the monitor where you want the overlay to appear.
+  </div>
+  
+  <div class="monitors-container" id="monitors-container">
+    <!-- Monitor options will be added here dynamically -->
+  </div>
+  
+  <script>
+    // Wait for electron IPC to be available
+    document.addEventListener('DOMContentLoaded', () => {
+      if (!window.electron) {
+        document.body.innerHTML = '<h1>Error</h1><p>IPC bridge not available. Please restart the application.</p>';
+        return;
+      }
+      
+      // Listen for monitor list from main process
+      window.electron.receive('monitor-list', (displays) => {
+        const container = document.getElementById('monitors-container');
+        
+        if (!displays || displays.length === 0) {
+          container.innerHTML = '<p>No displays detected.</p>';
+          return;
+        }
+        
+        // Generate monitor options
+        displays.forEach((display, index) => {
+          // Create a friendly name for the monitor
+          const monitorName = getMonitorName(display, index);
+          
+          // Create the option element
+          const option = document.createElement('div');
+          option.className = 'monitor-option';
+          option.setAttribute('data-monitor-id', display.id);
+          
+          // Create the monitor icon
+          const icon = document.createElement('div');
+          icon.className = 'monitor-icon';
+          icon.textContent = index + 1;
+          
+          // Create the details section
+          const details = document.createElement('div');
+          details.className = 'monitor-details';
+          
+          // Create the monitor name element
+          const nameEl = document.createElement('div');
+          nameEl.className = 'monitor-name';
+          nameEl.textContent = monitorName;
+          
+          // Add primary badge if this is the primary display
+          if (display.isPrimary) {
+            const badge = document.createElement('span');
+            badge.className = 'primary-badge';
+            badge.textContent = 'Primary';
+            nameEl.appendChild(badge);
+          }
+          
+          // Create the resolution info
+          const resolution = document.createElement('div');
+          resolution.className = 'monitor-resolution';
+          resolution.textContent = `${display.size.width} × ${display.size.height} at (${display.bounds.x}, ${display.bounds.y})`;
+          
+          // Assemble the elements
+          details.appendChild(nameEl);
+          details.appendChild(resolution);
+          option.appendChild(icon);
+          option.appendChild(details);
+          
+          // Add click handler
+          option.addEventListener('click', () => {
+            selectMonitor(display.id);
+          });
+          
+          // Add to container
+          container.appendChild(option);
+        });
+      });
+      
+      // Function to select a monitor and notify the main process
+      function selectMonitor(monitorId) {
+        window.electron.selectMonitor(monitorId);
+      }
+      
+      // Function to generate a friendly name for the monitor
+      function getMonitorName(display, index) {
+        // Try to get a descriptive name from the display object
+        let name = display.label || display.name || `Monitor ${index + 1}`;
+        
+        // Add some context based on position
+        if (display.bounds.x === 0 && display.bounds.y === 0) {
+          name += " (Main Position)";
+        } else if (display.bounds.x < 0) {
+          name += " (Left)";
+        } else if (display.bounds.x > 0) {
+          name += " (Right)";
+        } else if (display.bounds.y < 0) {
+          name += " (Top)";
+        } else if (display.bounds.y > 0) {
+          name += " (Bottom)";
+        }
+        
+        return name;
+      }
+    });
+  </script>
+</body>
+</html>
