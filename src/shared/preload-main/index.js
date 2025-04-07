@@ -9,7 +9,8 @@ contextBridge.exposeInMainWorld(
       // List of allowed channels to send
       const validSendChannels = [
         'toggle-border',
-        'overlay-item-completed'
+        'overlay-item-completed',
+        'save-twitch-credentials'
       ];
       
       if (validSendChannels.includes(channel)) {

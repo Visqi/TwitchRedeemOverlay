@@ -10,11 +10,8 @@ import fs from 'fs-extra';
 import os from 'os';
 import { URL } from 'url';
 import { generateSelfSignedCert } from './cert-utils.js';
-import dotenv from 'dotenv';
 import WebSocket from 'ws';
-
-// Load environment variables from .env file
-dotenv.config();
+import { getTwitchClientId, getTwitchClientSecret, hasRequiredConfig } from './config/app-config.js';
 
 // Secure store for saving Twitch credentials
 const secureStore = new ElectronStore({
@@ -22,16 +19,16 @@ const secureStore = new ElectronStore({
   name: 'twitch-credentials'
 });
 
-// Twitch API credentials from environment variables
-const TWITCH_CLIENT_ID = process.env.TWITCH_CLIENT_ID;
-const TWITCH_CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET;
+// Twitch API credentials from configuration
+const TWITCH_CLIENT_ID = getTwitchClientId();
+const TWITCH_CLIENT_SECRET = getTwitchClientSecret();
 const REDIRECT_PORT = 3000;
 const TWITCH_REDIRECT_URI = `http://localhost:${REDIRECT_PORT}/auth/callback`;
 
-// Validate that we have the required environment variables
-if (!TWITCH_CLIENT_ID || !TWITCH_CLIENT_SECRET) {
-  console.error('Error: Twitch API credentials missing in environment variables.');
-  console.error('Please create a .env file with TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET.');
+// Validate that we have the required configuration
+if (!hasRequiredConfig()) {
+  console.error('Error: Twitch API credentials missing in configuration.');
+  console.error('Please ensure your Twitch Client ID and Client Secret are properly configured.');
 }
 
 // Paths for SSL certificates
