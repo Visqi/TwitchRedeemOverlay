@@ -2,7 +2,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs-extra';
 import ElectronStore from 'electron-store';
-import { app, BrowserWindow, ipcMain, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain } from 'electron';
 import { __dirname } from '../utils.js';
 
 // Create secure store for app configuration
@@ -15,214 +15,91 @@ const configStore = new ElectronStore({
 const isDev = !app.isPackaged;
 console.log(`Running in ${isDev ? 'DEVELOPMENT' : 'PRODUCTION'} mode`);
 
-// First run flag
-let isFirstRun = false;
-
-// Backup file for credentials in user data directory
-const getCredentialsBackupFile = () => {
-  return path.join(app.getPath('userData'), 'twitch-credentials.json');
-};
-
-/**
- * Save credentials to backup file
- */
-const saveCredentialsToBackupFile = (clientId, clientSecret) => {
-  try {
-    const backupFile = getCredentialsBackupFile();
-    const data = {
-      TWITCH_CLIENT_ID: clientId,
-      TWITCH_CLIENT_SECRET: clientSecret,
-      timestamp: new Date().toISOString()
-    };
-    
-    fs.writeFileSync(backupFile, JSON.stringify(data, null, 2));
-    console.log(`Credentials saved to backup file: ${backupFile}`);
-    
-    return true;
-  } catch (err) {
-    console.error('Error saving credentials to backup file:', err);
-    return false;
-  }
-};
-
-/**
- * Try to load credentials from backup file
- */
-const loadCredentialsFromBackupFile = () => {
-  try {
-    const backupFile = getCredentialsBackupFile();
-    if (fs.existsSync(backupFile)) {
-      const data = JSON.parse(fs.readFileSync(backupFile, 'utf8'));
-      
-      if (data.TWITCH_CLIENT_ID && data.TWITCH_CLIENT_SECRET) {
-        console.log('Found credentials in backup file');
-        
-        // Set them to environment variables
-        process.env.TWITCH_CLIENT_ID = data.TWITCH_CLIENT_ID;
-        process.env.TWITCH_CLIENT_SECRET = data.TWITCH_CLIENT_SECRET;
-        
-        // Also save to secure store
-        configStore.set('twitchClientId', data.TWITCH_CLIENT_ID);
-        configStore.set('twitchClientSecret', data.TWITCH_CLIENT_SECRET);
-        
-        return true;
-      }
-    }
-    
-    return false;
-  } catch (err) {
-    console.error('Error loading credentials from backup file:', err);
-    return false;
-  }
-};
-
 /**
  * Initialize configuration for the application
  * Will load from .env in development and from stored config in production
  */
 export function initializeConfig() {
   try {
-    // Check if this is the first run
-    const firstRunMarker = path.join(app.getPath('userData'), '.first-run-complete');
-    isFirstRun = !fs.existsSync(firstRunMarker);
-    
-    if (isFirstRun) {
-      console.log('First run detected! Will create initial configuration');
-    }
-    
     // In development mode, use dotenv to load from .env file
     if (isDev) {
       console.log('Loading config from .env file (development mode)');
       dotenv.config();
-      
-      // If we have credentials in env vars, save them to the stores
-      if (process.env.TWITCH_CLIENT_ID && process.env.TWITCH_CLIENT_SECRET) {
-        configStore.set('twitchClientId', process.env.TWITCH_CLIENT_ID);
-        configStore.set('twitchClientSecret', process.env.TWITCH_CLIENT_SECRET);
-        
-        // Also save to backup file
-        saveCredentialsToBackupFile(
-          process.env.TWITCH_CLIENT_ID,
-          process.env.TWITCH_CLIENT_SECRET
-        );
-      }
     } else {
       // In production mode, try to find the .env file in multiple locations
       console.log('Searching for .env file in production mode');
       
-      // 1. First try to load from previously saved config
-      if (configStore.has('twitchClientId') && configStore.has('twitchClientSecret')) {
-        process.env.TWITCH_CLIENT_ID = configStore.get('twitchClientId');
-        process.env.TWITCH_CLIENT_SECRET = configStore.get('twitchClientSecret');
-        console.log('Loaded credentials from secure store');
+      // Possible paths for .env file
+      const possiblePaths = [
+        // In the app directory
+        path.join(process.cwd(), '.env'),
         
-        // Ensure backup file is also updated
-        saveCredentialsToBackupFile(
-          process.env.TWITCH_CLIENT_ID,
-          process.env.TWITCH_CLIENT_SECRET
-        );
+        // In the resources directory (electron-builder places it here)
+        path.join(process.resourcesPath, '.env'),
         
-      } else {
-        // 2. Try to load from backup file
-        const loadedFromBackup = loadCredentialsFromBackupFile();
+        // Next to the executable
+        path.join(path.dirname(app.getPath('exe')), '.env'),
         
-        if (!loadedFromBackup) {
-          // 3. Try to find .env file in various locations
+        // In app.getAppPath()
+        path.join(app.getAppPath(), '.env'),
+        
+        // In app.getPath('userData')
+        path.join(app.getPath('userData'), '.env')
+      ];
+      
+      // Log all possible paths we're checking
+      possiblePaths.forEach(p => console.log(`Checking for .env at: ${p}`));
+      
+      // Try to find and load the .env file from any of these locations
+      let envLoaded = false;
+      for (const envPath of possiblePaths) {
+        if (fs.existsSync(envPath)) {
+          console.log(`Found .env file at: ${envPath}`);
+          const envConfig = dotenv.parse(fs.readFileSync(envPath));
           
-          // Possible paths for .env file
-          const possiblePaths = [
-            // In the app directory
-            path.join(process.cwd(), '.env'),
-            
-            // In the resources directory (electron-builder places it here)
-            path.join(process.resourcesPath, '.env'),
-            
-            // Next to the executable
-            path.join(path.dirname(app.getPath('exe')), '.env'),
-            
-            // In app.getAppPath()
-            path.join(app.getAppPath(), '.env'),
-            
-            // In app.getPath('userData')
-            path.join(app.getPath('userData'), '.env')
-          ];
+          // Set environment variables
+          Object.entries(envConfig).forEach(([key, value]) => {
+            process.env[key] = value;
+          });
           
-          // Log all possible paths we're checking
-          possiblePaths.forEach(p => console.log(`Checking for .env at: ${p}`));
-          
-          // Try to find and load the .env file from any of these locations
-          let envLoaded = false;
-          for (const envPath of possiblePaths) {
-            if (fs.existsSync(envPath)) {
-              console.log(`Found .env file at: ${envPath}`);
-              const envConfig = dotenv.parse(fs.readFileSync(envPath));
-              
-              // Set environment variables
-              Object.entries(envConfig).forEach(([key, value]) => {
-                process.env[key] = value;
-              });
-              
-              // Store critical values in our secure config if not already there
-              if (envConfig.TWITCH_CLIENT_ID) {
-                console.log('Storing Twitch Client ID in secure config');
-                configStore.set('twitchClientId', envConfig.TWITCH_CLIENT_ID);
-              }
-              
-              if (envConfig.TWITCH_CLIENT_SECRET) {
-                console.log('Storing Twitch Client Secret in secure config');
-                configStore.set('twitchClientSecret', envConfig.TWITCH_CLIENT_SECRET);
-              }
-              
-              // Also save to backup file for redundancy
-              if (envConfig.TWITCH_CLIENT_ID && envConfig.TWITCH_CLIENT_SECRET) {
-                saveCredentialsToBackupFile(
-                  envConfig.TWITCH_CLIENT_ID,
-                  envConfig.TWITCH_CLIENT_SECRET
-                );
-              }
-              
-              envLoaded = true;
-              console.log('Successfully loaded .env file');
-              break;
-            }
+          // Store critical values in our secure config if not already there
+          if (envConfig.TWITCH_CLIENT_ID && !configStore.has('twitchClientId')) {
+            console.log('Storing Twitch Client ID in secure config');
+            configStore.set('twitchClientId', envConfig.TWITCH_CLIENT_ID);
           }
           
-          if (!envLoaded) {
-            console.log('No .env file found, will use stored config if available');
+          if (envConfig.TWITCH_CLIENT_SECRET && !configStore.has('twitchClientSecret')) {
+            console.log('Storing Twitch Client Secret in secure config');
+            configStore.set('twitchClientSecret', envConfig.TWITCH_CLIENT_SECRET);
           }
+          
+          envLoaded = true;
+          console.log('Successfully loaded .env file');
+          break;
         }
       }
-    }
-    
-    // Set first run complete
-    if (isFirstRun) {
-      try {
-        // Create first run marker
-        const firstRunMarker = path.join(app.getPath('userData'), '.first-run-complete');
-        fs.writeFileSync(firstRunMarker, new Date().toISOString());
-        console.log('First run complete marker created');
-      } catch (err) {
-        console.error('Error creating first run marker:', err);
+      
+      if (!envLoaded) {
+        console.log('No .env file found, will use stored config if available');
       }
     }
     
-    // Log config status
-    logConfigStatus();
-    
-    // For first run or if credentials are missing, show dialog
-    const hasClientId = Boolean(process.env.TWITCH_CLIENT_ID);
-    const hasClientSecret = Boolean(process.env.TWITCH_CLIENT_SECRET);
-    
-    if ((isFirstRun || !hasClientId || !hasClientSecret) && !isDev) {
-      console.log('First run or missing credentials - will show config dialog on startup');
-      return false;
+    // Always check the secure store as a backup
+    if (!process.env.TWITCH_CLIENT_ID && configStore.has('twitchClientId')) {
+      process.env.TWITCH_CLIENT_ID = configStore.get('twitchClientId');
+      console.log('Using Twitch Client ID from secure store');
     }
     
-    return true;
+    if (!process.env.TWITCH_CLIENT_SECRET && configStore.has('twitchClientSecret')) {
+      process.env.TWITCH_CLIENT_SECRET = configStore.get('twitchClientSecret');
+      console.log('Using Twitch Client Secret from secure store');
+    }
   } catch (err) {
     console.error('Error initializing config:', err);
-    return false;
   }
+  
+  // Log config status
+  logConfigStatus();
 }
 
 /**
@@ -262,16 +139,6 @@ export function setConfig(key, value) {
     .toUpperCase();
     
   process.env[envKey] = value;
-  
-  // Special case for Twitch credentials - save to backup file
-  if (key === 'twitchClientId' || key === 'twitchClientSecret') {
-    const clientId = key === 'twitchClientId' ? value : getConfig('twitchClientId');
-    const clientSecret = key === 'twitchClientSecret' ? value : getConfig('twitchClientSecret');
-    
-    if (clientId && clientSecret) {
-      saveCredentialsToBackupFile(clientId, clientSecret);
-    }
-  }
 }
 
 /**
@@ -310,7 +177,6 @@ export function hasRequiredConfig() {
  */
 export function logConfigStatus() {
   console.log(`Running in ${isDev ? 'development' : 'production'} mode`);
-  console.log(`First run: ${isFirstRun}`);
   console.log(`App Path: ${app.getAppPath()}`);
   console.log(`User Data Path: ${app.getPath('userData')}`);
   console.log(`Executable Path: ${app.getPath('exe')}`);
@@ -347,11 +213,6 @@ export function logConfigStatus() {
     const hasKey = configStore.has(key);
     console.log(`${key}: ${hasKey ? 'present' : 'missing'}`);
   });
-  
-  // Check backup file
-  const backupPath = getCredentialsBackupFile();
-  const hasBackup = fs.existsSync(backupPath);
-  console.log(`Backup credentials file: ${hasBackup ? 'exists' : 'missing'}`);
 }
 
 /**

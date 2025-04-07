@@ -111,36 +111,24 @@ app.whenReady().then(async () => {
   // Set up application menu
   createAppMenu();
   
-  // Initialize configuration system - this now returns a boolean indicating success
-  const configLoaded = initializeConfig();
+  // Initialize configuration system
+  initializeConfig();
   logConfigStatus();
   
-  // Get config helpers
+  // Check if we have Twitch API credentials, show config dialog if not
   const { hasRequiredConfig, showCredentialConfigWindow } = await import('./config/app-config.js');
   
-  // Check if we have required configuration
-  if (!configLoaded || !hasRequiredConfig()) {
-    console.log('Configuration missing or first run detected, showing credentials dialog');
-    
-    // Show credential config dialog
+  if (!hasRequiredConfig()) {
+    console.log('Twitch API credentials not found, showing credentials dialog');
     const credWindow = showCredentialConfigWindow();
     
     // Wait for credential window to close before continuing
-    credWindow.once('closed', () => {
-      // Re-check if we have credentials after the dialog is closed
-      if (hasRequiredConfig()) {
-        console.log('Credentials have been set, initializing Twitch module');
-        initializeTwitchModule();
-        showMonitorSelectionDialog(createOverlay);
-      } else {
-        console.warn('Credentials still missing after dialog closed, starting anyway');
-        // Continue anyway but modules that need credentials may not work
-        initializeTwitchModule();
-        showMonitorSelectionDialog(createOverlay);
-      }
+    credWindow.on('closed', () => {
+      // Initialize Twitch module after credentials are set
+      initializeTwitchModule();
+      showMonitorSelectionDialog(createOverlay);
     });
   } else {
-    console.log('Configuration loaded successfully, initializing application');
     // Initialize Twitch module
     initializeTwitchModule();
     showMonitorSelectionDialog(createOverlay);
