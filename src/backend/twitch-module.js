@@ -59,6 +59,10 @@ const authState = {
 
 // Event listeners for reward redemptions
 const eventListeners = new Set();
+// Track window-specific event listeners for cleanup
+const windowEventListeners = new Map();
+// Track IPC handlers that need to be removed
+const registeredIpcHandlers = new Set();
 
 // Store configured rewards
 let configuredRewards = {};
@@ -351,6 +355,10 @@ export function showTwitchSettingsWindow() {
   
   // Listen for the window to be closed
   twitchSettingsWindow.on('closed', () => {
+    // Clean up any event listeners specific to this window
+    cleanupWindowEventListeners(twitchSettingsWindow);
+    // Clean up IPC handlers
+    cleanupIpcHandlers();
     twitchSettingsWindow = null;
   });
   
@@ -359,11 +367,61 @@ export function showTwitchSettingsWindow() {
 }
 
 /**
+ * Clean up window-specific event listeners
+ */
+function cleanupWindowEventListeners(window) {
+  if (windowEventListeners.has(window)) {
+    const listeners = windowEventListeners.get(window);
+    // Remove all listeners registered for this window
+    listeners.forEach(listener => {
+      eventListeners.delete(listener);
+    });
+    // Clear the tracking set
+    windowEventListeners.delete(window);
+    console.log(`Cleaned up ${listeners.size} event listeners for closed window`);
+  }
+}
+
+/**
+ * Clean up registered IPC handlers
+ */
+function cleanupIpcHandlers() {
+  // We'll keep EventSub-related IPC handlers active
+  const preservedHandlers = ['toggle-reward-polling'];
+  
+  registeredIpcHandlers.forEach(channel => {
+    // Skip cleanup for handlers that should persist
+    if (preservedHandlers.includes(channel)) {
+      console.log(`Preserving IPC handler for: ${channel}`);
+      return;
+    }
+    
+    ipcMain.removeAllListeners(channel);
+    console.log(`Removed IPC handler for: ${channel}`);
+  });
+  
+  // Only remove the handlers we actually cleared
+  preservedHandlers.forEach(channel => {
+    registeredIpcHandlers.delete(channel);
+  });
+}
+
+/**
  * Set up IPC handlers for the Twitch settings window
  */
 function setupTwitchSettingsHandlers() {
+  // Remove only window-specific handlers to prevent duplicates
+  // We'll exclude EventSub-related handlers from cleanup
+  cleanupIpcHandlers();
+  
+  // Helper function to register handlers with cleanup tracking
+  const registerHandler = (channel, handler) => {
+    registeredIpcHandlers.add(channel);
+    ipcMain.on(channel, handler);
+  };
+  
   // Handle login request
-  ipcMain.on('twitch-login', (event) => {
+  registerHandler('twitch-login', (event) => {
     showTwitchLoginWindow(() => {
       // Send updated auth status after successful login
       if (twitchSettingsWindow) {
@@ -378,7 +436,7 @@ function setupTwitchSettingsHandlers() {
   });
   
   // Handle logout request
-  ipcMain.on('twitch-logout', (event) => {
+  registerHandler('twitch-logout', (event) => {
     logoutFromTwitch();
     // Send updated auth status
     if (twitchSettingsWindow) {
@@ -392,7 +450,7 @@ function setupTwitchSettingsHandlers() {
   });
   
   // Handle refresh own channel request
-  ipcMain.on('refresh-own-channel', async (event) => {
+  registerHandler('refresh-own-channel', async (event) => {
     try {
       const userName = secureStore.get('userName');
       
@@ -438,7 +496,7 @@ function setupTwitchSettingsHandlers() {
   });
   
   // Handle channel setup request
-  ipcMain.on('setup-channel', async (event, channelUrl) => {
+  registerHandler('setup-channel', async (event, channelUrl) => {
     try {
       // Extract channel name from URL
       const channelName = extractChannelFromUrl(channelUrl);
@@ -503,7 +561,7 @@ function setupTwitchSettingsHandlers() {
   });
   
   // Handle poll toggle request
-  ipcMain.on('toggle-reward-polling', (event, shouldPoll) => {
+  registerHandler('toggle-reward-polling', (event, shouldPoll) => {
     if (shouldPoll) {
       if (authState.channelId) {
         startRewardPolling(authState.channelId);
@@ -528,7 +586,7 @@ function setupTwitchSettingsHandlers() {
   });
   
   // Add new handlers for reward configuration
-  ipcMain.on('get-rewards-list', async (event) => {
+  registerHandler('get-rewards-list', async (event) => {
     try {
       const rewards = await refreshRewardsList();
       if (twitchSettingsWindow) {
@@ -542,16 +600,16 @@ function setupTwitchSettingsHandlers() {
     }
   });
   
-  ipcMain.on('save-reward-config', (event, {rewardId, config}) => {
+  registerHandler('save-reward-config', (event, {rewardId, config}) => {
     saveRewardConfig(rewardId, config);
   });
   
-  ipcMain.on('delete-reward-config', (event, {rewardId}) => {
+  registerHandler('delete-reward-config', (event, {rewardId}) => {
     deleteRewardConfig(rewardId);
   });
   
   // Handle test reward event
-  ipcMain.on('test-reward', (event, reward) => {
+  registerHandler('test-reward', (event, reward) => {
     if (!reward || !reward.isConfigured || !reward.config) {
       console.log('Cannot test: reward is not configured');
       return;
@@ -575,12 +633,12 @@ function setupTwitchSettingsHandlers() {
       redeemed_at: new Date().toISOString()
     };
     
-    // Call the reward redeemed handlers with the mock redemption
+    // Call the reward redeemed handlers directly with the mock redemption
     notifyRewardRedeemed(mockRedemption, reward.config);
   });
 
   // Handle file dialog for media selection
-  ipcMain.on('open-media-file-dialog', (event) => {
+  registerHandler('open-media-file-dialog', (event) => {
     dialog.showOpenDialog({
       properties: ['openFile'],
       filters: [
@@ -1298,8 +1356,16 @@ function processRedemptions(redemptions) {
 /**
  * Add a listener for reward redemptions
  */
-export function addRewardListener(listener) {
+export function addRewardListener(listener, window = null) {
   eventListeners.add(listener);
+  
+  // If a window is provided, track this listener for cleanup when the window closes
+  if (window) {
+    if (!windowEventListeners.has(window)) {
+      windowEventListeners.set(window, new Set());
+    }
+    windowEventListeners.get(window).add(listener);
+  }
 }
 
 /**
@@ -1307,6 +1373,13 @@ export function addRewardListener(listener) {
  */
 export function removeRewardListener(listener) {
   eventListeners.delete(listener);
+  
+  // Also remove from window-specific tracking if present
+  for (const [window, listeners] of windowEventListeners.entries()) {
+    if (listeners.has(listener)) {
+      listeners.delete(listener);
+    }
+  }
 }
 
 /**
@@ -1357,6 +1430,12 @@ export function initializeTwitchModule() {
   if (savedConfiguredRewards) {
     configuredRewards = savedConfiguredRewards;
   }
+  
+  // If we were previously polling for rewards, reconnect to EventSub
+  if (authState.channelId && secureStore.get('wasPollingActive') === true) {
+    console.log('Restoring previous EventSub connection...');
+    startRewardPolling(authState.channelId);
+  }
 }
 
 /**
@@ -1372,6 +1451,13 @@ export function getConfiguredRewards() {
 export function saveRewardConfig(rewardId, config) {
   configuredRewards[rewardId] = config;
   secureStore.set('configuredRewards', configuredRewards);
+  
+  // If we're polling rewards and the settings window is closed
+  // Make sure this new reward gets picked up
+  if (authState.isPollingRewards) {
+    // Save the state so it persists between app restarts
+    secureStore.set('wasPollingActive', true);
+  }
   
   // Emit event to update UI if settings window is open
   if (twitchSettingsWindow) {
