@@ -141,43 +141,251 @@
       console.log('Local media cache cleared');
     }
     
-    // Function to apply chroma key via CSS filters
-    function applyChromaKey(element, chromaKey) {
+    // Function to apply chroma key via WebGL shaders
+    function applyChromaKey(element, chromaKey, data) {
       if (!chromaKey) return;
       
       try {
         // Convert hex to rgb if needed
-        let color = chromaKey;
-        if (color.startsWith('#')) {
-          const r = parseInt(color.slice(1, 3), 16);
-          const g = parseInt(color.slice(3, 5), 16);
-          const b = parseInt(color.slice(5, 7), 16);
-          color = `rgb(${r}, ${g}, ${b})`;
+        let targetR, targetG, targetB;
+        if (chromaKey.startsWith('#')) {
+          targetR = parseInt(chromaKey.slice(1, 3), 16) / 255;
+          targetG = parseInt(chromaKey.slice(3, 5), 16) / 255;
+          targetB = parseInt(chromaKey.slice(5, 7), 16) / 255;
+        } else if (chromaKey.startsWith('rgb')) {
+          const match = chromaKey.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+          if (match) {
+            targetR = parseInt(match[1]) / 255;
+            targetG = parseInt(match[2]) / 255;
+            targetB = parseInt(match[3]) / 255;
+          }
         }
         
-        // Create a WebGL canvas for chroma keying
-        const canvas = document.createElement('canvas');
-        canvas.style.position = 'absolute';
-        canvas.style.top = '0';
-        canvas.style.left = '0';
-        canvas.style.width = '100%';
-        canvas.style.height = '100%';
-        canvas.style.zIndex = '2';
-        
-        // Add a class to help with styling
-        element.classList.add('chroma-key-element');
-        
-        // Use CSS mix-blend-mode for simple chroma keying
         if (element.tagName === 'VIDEO') {
-          // For videos we need to use a different approach
-          element.style.mixBlendMode = 'multiply';
+          // For videos we need to use a canvas with WebGL
+          const videoContainer = element.parentElement;
+          
+          // Check if container exists
+          if (!videoContainer) {
+            console.error('Video container not found');
+            return;
+          }
+          
+          // Create a canvas for the WebGL rendering
+          const canvas = document.createElement('canvas');
+          canvas.style.position = 'absolute';
+          canvas.style.top = '0';
+          canvas.style.left = '0';
+          canvas.style.width = '100%';
+          canvas.style.height = '100%';
+          
+          // Set actual canvas dimensions to match video
+          const updateCanvasSize = () => {
+            canvas.width = element.videoWidth || 300;
+            canvas.height = element.videoHeight || 200;
+          };
+          
+          // Update size immediately if metadata already loaded
+          if (element.videoWidth) {
+            updateCanvasSize();
+          }
+          
+          element.addEventListener('loadedmetadata', updateCanvasSize);
+          
+          // Get WebGL context
+          const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+          if (!gl) {
+            console.error('WebGL not supported');
+            return;
+          }
+          
+          // Create shader program
+          const vertexShaderSource = `
+            attribute vec2 a_position;
+            attribute vec2 a_texCoord;
+            varying vec2 v_texCoord;
+            void main() {
+              gl_Position = vec4(a_position, 0, 1);
+              v_texCoord = a_texCoord;
+            }
+          `;
+          
+          const fragmentShaderSource = `
+            precision mediump float;
+            varying vec2 v_texCoord;
+            uniform sampler2D u_image;
+            uniform vec3 u_keyColor;
+            uniform float u_similarity;
+            uniform float u_smoothness;
+            uniform float u_spill;
+            
+            void main() {
+              vec4 color = texture2D(u_image, v_texCoord);
+              
+              // Calculate color difference - use a weighted distance that's more sensitive to green
+              float colorDistance = length(color.rgb - u_keyColor);
+              
+              // Improved algorithm: weight green channel more heavily for green screens
+              // Adjust these weights depending on your key color
+              vec3 weights = vec3(0.3, 0.6, 0.1);
+              float weightedDistance = 
+                weights.r * abs(color.r - u_keyColor.r) +
+                weights.g * abs(color.g - u_keyColor.g) +
+                weights.b * abs(color.b - u_keyColor.b);
+              
+              // Combine both methods for better results
+              float diff = mix(colorDistance, weightedDistance, 0.5);
+              
+              // Calculate alpha based on similarity and smoothness
+              float alpha = smoothstep(u_similarity, u_similarity + u_smoothness, diff);
+              
+              // Spill suppression: reduce green in semi-transparent areas (for green screens)
+              float spillValue = u_spill * (1.0 - alpha);
+              vec3 spillReduction = color.rgb;
+              
+              // If it's a green screen, reduce green channel in semi-transparent areas
+              if (u_keyColor.g > max(u_keyColor.r, u_keyColor.b)) {
+                float greenExcess = color.g - ((color.r + color.b) * 0.5);
+                if (greenExcess > 0.0) {
+                  spillReduction.g -= max(0.0, greenExcess * spillValue);
+                }
+              }
+              
+              // Apply final color with alpha
+              gl_FragColor = vec4(spillReduction, alpha);
+            }
+          `;
+          
+          // Create shaders
+          const vertexShader = gl.createShader(gl.VERTEX_SHADER);
+          gl.shaderSource(vertexShader, vertexShaderSource);
+          gl.compileShader(vertexShader);
+          
+          const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+          gl.shaderSource(fragmentShader, fragmentShaderSource);
+          gl.compileShader(fragmentShader);
+          
+          // Create program
+          const program = gl.createProgram();
+          gl.attachShader(program, vertexShader);
+          gl.attachShader(program, fragmentShader);
+          gl.linkProgram(program);
+          gl.useProgram(program);
+          
+          // Set up buffers
+          const positionBuffer = gl.createBuffer();
+          const positions = [
+            -1.0, -1.0,
+             1.0, -1.0,
+            -1.0,  1.0,
+             1.0,  1.0
+          ];
+          gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+          gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+          
+          const positionLocation = gl.getAttribLocation(program, 'a_position');
+          gl.enableVertexAttribArray(positionLocation);
+          gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+          
+          const texCoordBuffer = gl.createBuffer();
+          const texCoords = [
+            0.0, 1.0,
+            1.0, 1.0,
+            0.0, 0.0,
+            1.0, 0.0
+          ];
+          gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
+          gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(texCoords), gl.STATIC_DRAW);
+          
+          const texCoordLocation = gl.getAttribLocation(program, 'a_texCoord');
+          gl.enableVertexAttribArray(texCoordLocation);
+          gl.vertexAttribPointer(texCoordLocation, 2, gl.FLOAT, false, 0, 0);
+          
+          // Create texture
+          const texture = gl.createTexture();
+          gl.bindTexture(gl.TEXTURE_2D, texture);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+          
+          // Set uniforms
+          const keyColorLocation = gl.getUniformLocation(program, 'u_keyColor');
+          gl.uniform3f(keyColorLocation, targetR, targetG, targetB);
+          
+          // Get similarity and smoothness values from config or use defaults
+          let similarity = 0.25;  // Default
+          let smoothness = 0.1;   // Default
+          
+          // If we have explicit values in the data, use them
+          if (data && data.chromaSimilarity !== undefined) {
+            similarity = data.chromaSimilarity;
+          }
+          
+          if (data && data.chromaSmoothness !== undefined) {
+            smoothness = data.chromaSmoothness;
+          }
+          
+console.log(`Chroma key similarity: ${similarity}, smoothness: ${smoothness}`);
+console.log(data);
+
+          const similarityLocation = gl.getUniformLocation(program, 'u_similarity');
+          gl.uniform1f(similarityLocation, similarity);
+          
+          const smoothnessLocation = gl.getUniformLocation(program, 'u_smoothness');
+          gl.uniform1f(smoothnessLocation, smoothness);
+          
+          const spillLocation = gl.getUniformLocation(program, 'u_spill');
+          gl.uniform1f(spillLocation, 0.7); // New spill reduction parameter
+          
+          // Let's make sure we append the canvas to the container and video is inside it
+          // First, ensure video is visible inside the container
+          element.style.display = 'block';
+          element.style.visibility = 'hidden'; // Hide but keep layout
+          element.style.position = 'absolute'; // Position it absolutely
+          
+          // Add canvas to the container
+          videoContainer.appendChild(canvas);
+          
+          // Render function
+          function render() {
+            if (!element.paused && !element.ended) {
+              // Update texture with new video frame
+              gl.bindTexture(gl.TEXTURE_2D, texture);
+              gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, element);
+              
+              // Draw
+              gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+              
+              // Request next frame
+              requestAnimationFrame(render);
+            }
+          }
+          
+          // Start rendering as soon as we have video data
+          element.addEventListener('play', () => {
+            render();
+          });
+          
+          if (!element.paused && !element.ended) {
+            render(); // Start rendering immediately if video is already playing
+          }
+          
+          // Enable alpha blending
+          gl.enable(gl.BLEND);
+          gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+          
+          console.log(`Applied WebGL chroma key for video: RGB(${targetR*255}, ${targetG*255}, ${targetB*255})`);
         } else {
-          // For images/gifs we can use background-blend-mode
-          element.style.backgroundColor = color;
+          // For images/gifs - use the default approach with CSS for now
+          // But we could use a similar WebGL approach if needed
+          element.classList.add('chroma-key-element');
+          
+          // Apply a simple blend mode for images
+          element.style.backgroundColor = chromaKey;
           element.style.backgroundBlendMode = 'screen';
+          console.log(`Applied CSS chroma key for image: ${chromaKey}`);
         }
-        
-        console.log(`Applied chroma key: ${color}`);
       } catch (err) {
         console.error('Error applying chroma key:', err);
       }
@@ -267,15 +475,23 @@
         video.autoplay = true;
         video.loop = false;
         video.muted = true;  // Muted by default
-        video.src = data.path;
         
-        // Apply chroma key if specified
-        if (data.chromaKey) {
-          applyChromaKey(video, data.chromaKey);
-        }
-        
+        // IMPORTANT: First add video to container, THEN add container to DOM
         videoContainer.appendChild(video);
         container.appendChild(videoContainer);
+        
+        // Now set the src to start loading the video
+        video.src = data.path;
+        
+        // Only AFTER the video is in the DOM, apply chroma key if specified
+        if (data.chromaKey) {
+          // Ensure video has a parent container before applying chroma key
+          console.log('Applying chroma key, video parent:', video.parentElement);
+          setTimeout(() => {
+            // Add a small delay to ensure DOM is updated
+            applyChromaKey(video, data.chromaKey, data);
+          }, 0);
+        }
         
         // Auto-remove after duration or when video ends
         const removeVideo = () => {
@@ -304,7 +520,7 @@
         
         // Apply chroma key if specified
         if (data.chromaKey) {
-          applyChromaKey(item, data.chromaKey);
+          applyChromaKey(item, data.chromaKey, data);
         }
         
         // Add to container

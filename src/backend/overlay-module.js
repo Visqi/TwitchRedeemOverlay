@@ -103,7 +103,9 @@ async function handleTwitchReward({ redemption, config }) {
           title: redemption.reward.title,
           userName: redemption.user_name,
           userInput: redemption.user_input || ''
-        }
+        },
+        chromaSimilarity: config.similarity || 0.25,
+        chromaSmoothness: config.smoothness || 0.1, 
       });
     }
   } catch (err) {

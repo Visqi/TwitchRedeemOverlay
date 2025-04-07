@@ -478,6 +478,19 @@
             <p class="small-text">Color to make transparent (e.g., #00ff00 for green)</p>
           </div>
           
+          <div class="form-group-row">
+            <div class="form-group">
+              <label for="chroma-similarity">Similarity:</label>
+              <input type="number" id="chroma-similarity" placeholder="0.25" value="0.25" min="0.05" max="0.5" step="0.01" />
+              <p class="small-text">Higher values remove more colors (0.05-0.5)</p>
+            </div>
+            <div class="form-group">
+              <label for="chroma-smoothness">Smoothness:</label>
+              <input type="number" id="chroma-smoothness" placeholder="0.1" value="0.1" min="0.01" max="0.2" step="0.01" />
+              <p class="small-text">Edge blending amount (0.01-0.2)</p>
+            </div>
+          </div>
+          
           <div class="form-group">
             <label>Preview:</label>
             <div id="media-preview" class="media-preview">
@@ -533,6 +546,8 @@
       const mediaHeightInput = document.getElementById('media-height');
       const durationInput = document.getElementById('duration');
       const chromaKeyInput = document.getElementById('chroma-key');
+      const chromaSimilarityInput = document.getElementById('chroma-similarity');
+      const chromaSmoothnessInput = document.getElementById('chroma-smoothness');
       const mediaPreview = document.getElementById('media-preview');
       
       // Current reward being configured
@@ -777,6 +792,8 @@
         mediaHeightInput.value = '';
         durationInput.value = 5000;
         chromaKeyInput.value = '';
+        chromaSimilarityInput.value = 0.25;
+        chromaSmoothnessInput.value = 0.1;
         
         // Fill with existing data if configured
         if (reward.isConfigured && reward.config) {
@@ -789,6 +806,8 @@
           mediaHeightInput.value = config.height || '';
           durationInput.value = config.duration || 5000;
           chromaKeyInput.value = config.chromaKey || '';
+          chromaSimilarityInput.value = config.similarity || 0.25;
+          chromaSmoothnessInput.value = config.smoothness || 0.1;
           
           // Update preview
           updateMediaPreview();
@@ -823,7 +842,9 @@
           width: mediaWidthInput.value ? parseInt(mediaWidthInput.value, 10) : undefined,
           height: mediaHeightInput.value ? parseInt(mediaHeightInput.value, 10) : undefined,
           duration: parseInt(durationInput.value, 10) || 5000,
-          chromaKey: chromaKeyInput.value || undefined
+          chromaKey: chromaKeyInput.value || undefined,
+          similarity: parseFloat(chromaSimilarityInput.value) || 0.25,
+          smoothness: parseFloat(chromaSmoothnessInput.value) || 0.1
         };
         
         // Validate URL
