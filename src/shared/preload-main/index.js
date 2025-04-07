@@ -1,19 +1,36 @@
-// Use CommonJS syntax for preload scripts
 const { contextBridge, ipcRenderer } = require('electron');
 
-// Expose protected methods that allow the renderer process to use IPC
-contextBridge.exposeInMainWorld('electron', {
-  receive: (channel, func) => {
-    // Whitelist channels for security
-    const validChannels = ['display-overlay', 'clear-cache', 'toggle-border'];
-    if (validChannels.includes(channel)) {
-      // Remove any previous listener to avoid duplicates
-      ipcRenderer.removeAllListeners(channel);
-      // Add the new listener
-      ipcRenderer.on(channel, (event, ...args) => func(...args));
+// Expose protected methods that allow the renderer process to use
+// the ipcRenderer without exposing the entire object
+contextBridge.exposeInMainWorld(
+  'electron',
+  {
+    send: (channel, data) => {
+      // List of allowed channels to send
+      const validSendChannels = [
+        'toggle-border',
+        'overlay-item-completed'
+      ];
+      
+      if (validSendChannels.includes(channel)) {
+        ipcRenderer.send(channel, data);
+      }
+    },
+    receive: (channel, func) => {
+      // List of allowed channels to receive
+      const validReceiveChannels = [
+        'display-overlay',
+        'toggle-border',
+        'clear-cache'
+      ];
+      
+      if (validReceiveChannels.includes(channel)) {
+        // Remove any old listeners to avoid duplicates
+        ipcRenderer.removeAllListeners(channel);
+        
+        // Add the new listener
+        ipcRenderer.on(channel, (event, ...args) => func(...args));
+      }
     }
-  },
-  toggleBorder: (visible) => {
-    ipcRenderer.send('toggle-border', visible);
   }
-});
+);

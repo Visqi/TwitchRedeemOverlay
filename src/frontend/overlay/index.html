@@ -527,11 +527,17 @@
         const removeVideo = () => {
           if (videoContainer && videoContainer.parentNode) {
             videoContainer.parentNode.removeChild(videoContainer);
+            // Notify the main process that this overlay item has completed
+            window.electron.send('overlay-item-completed');
           }
         };
         
         video.onended = removeVideo;
-        setTimeout(removeVideo, data.duration);
+        
+        // Use either video end event or fallback to duration timeout
+        if (data.duration) {
+          setTimeout(removeVideo, data.duration);
+        }
         
         item = videoContainer;
       } else {
@@ -556,10 +562,12 @@
         // Add to container
         container.appendChild(item);
         
-        // Remove after duration
+        // Remove after duration and notify queue
         setTimeout(() => {
           if (item && item.parentNode) {
             item.parentNode.removeChild(item);
+            // Notify the main process that this overlay item has completed
+            window.electron.send('overlay-item-completed');
           }
         }, data.duration);
       }

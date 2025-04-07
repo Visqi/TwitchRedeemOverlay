@@ -11,6 +11,10 @@ let tray = null;
 // Border visibility state
 let borderVisible = true;
 
+// Overlay queue system
+const overlayQueue = [];
+let isProcessingQueue = false;
+
 // Create the overlay window
 export function createOverlay(monitorInfo) {
   // Create the browser window
@@ -31,7 +35,7 @@ export function createOverlay(monitorInfo) {
   });
 
   //open devtools for debugging
-  mainWindow.webContents.openDevTools({ mode: 'detach' });
+  //mainWindow.webContents.openDevTools({ mode: 'detach' });
 
   // Load the index.html of the app
   mainWindow.loadFile(path.join(__dirname, '..', 'frontend', 'overlay', 'index.html'));
@@ -57,6 +61,11 @@ export function createOverlay(monitorInfo) {
   // Register Twitch reward listener
   setupTwitchRewardListener();
   
+  // Listen for events from renderer about overlay item completion
+  ipcMain.on('overlay-item-completed', () => {
+    processNextQueueItem();
+  });
+
   return mainWindow;
 }
 
@@ -90,7 +99,7 @@ async function handleTwitchReward({ redemption, config }) {
       );
 
       // Send the data to the renderer process
-      mainWindow.webContents.send('display-overlay', {
+      addToOverlayQueue({
         type: mediaType,
         path: config.path.replace(/\\/g, '/'), // Convert backslashes to forward slashes
         x: config.x || 0,
@@ -110,6 +119,32 @@ async function handleTwitchReward({ redemption, config }) {
     }
   } catch (err) {
     console.error('Error handling Twitch reward:', err);
+  }
+}
+
+// Process the next item in the queue
+function processNextQueueItem() {
+  if (overlayQueue.length === 0) {
+    isProcessingQueue = false;
+    return;
+  }
+
+  isProcessingQueue = true;
+  const nextItem = overlayQueue.shift();
+  
+  if (mainWindow) {
+    console.log('Processing next queue item:', nextItem.type);
+    mainWindow.webContents.send('display-overlay', nextItem);
+  }
+}
+
+// Add an item to the overlay queue
+function addToOverlayQueue(overlayData) {
+  console.log('Adding to overlay queue:', overlayData.type);
+  overlayQueue.push(overlayData);
+  
+  if (!isProcessingQueue) {
+    processNextQueueItem();
   }
 }
 
@@ -162,6 +197,11 @@ function createSystemTray() {
         // Open Twitch settings window
         showTwitchSettingsWindow();
       }
+    },
+    { type: 'separator' },
+    {
+      label: 'Copyright © 2025 Visqi',
+      enabled: false // Disabled menu item, just for display
     },
     { type: 'separator' },
     {
@@ -235,7 +275,7 @@ export async function handleRedisMessage(message, channel) {
       }
       
       // Send the data to the renderer process
-      mainWindow.webContents.send('display-overlay', {
+      addToOverlayQueue({
         type: mediaType,
         path: localPath,
         x: data.x || 0,
