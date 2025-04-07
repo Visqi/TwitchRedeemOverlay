@@ -37,7 +37,7 @@
     video {
       width: 100%;
       height: 100%;
-      object-fit: contain;
+      object-fit: fill;
     }
     
     .chroma-key-filter {
@@ -83,12 +83,10 @@
 <body>
   <div id="overlay-container"></div>
   <div class="border-container" id="border-container"></div>
-  <button id="toggle-border">Hide Border</button>
 
   <script>
     // Border visibility toggle
     const borderElement = document.getElementById('border-container');
-    const toggleButton = document.getElementById('toggle-border');
     let borderVisible = true;
     
     // Initialize border to cover the entire viewport (including vertical monitors)
@@ -102,25 +100,6 @@
     updateBorderSize();
     window.addEventListener('resize', updateBorderSize);
     
-    toggleButton.addEventListener('click', () => {
-      borderVisible = !borderVisible;
-      borderElement.style.display = borderVisible ? 'block' : 'none';
-      toggleButton.textContent = borderVisible ? 'Hide Border' : 'Show Border';
-    });
-    
-    // Auto-hide toggle button after 5 seconds
-    setTimeout(() => {
-      toggleButton.style.opacity = '0';
-    }, 5000);
-    
-    // Show toggle button when mouse moves
-    document.addEventListener('mousemove', () => {
-      toggleButton.style.opacity = '0.3';
-      clearTimeout(window.hideButtonTimer);
-      window.hideButtonTimer = setTimeout(() => {
-        toggleButton.style.opacity = '0';
-      }, 3000);
-    });
     
     // Cache to store media dimensions
     const mediaDimensions = new Map();
@@ -178,11 +157,14 @@
           canvas.style.left = '0';
           canvas.style.width = '100%';
           canvas.style.height = '100%';
+          canvas.style.objectFit = 'fill'; // Make canvas fill the container
           
           // Set actual canvas dimensions to match video
           const updateCanvasSize = () => {
-            canvas.width = element.videoWidth || 300;
-            canvas.height = element.videoHeight || 200;
+            // Use the container dimensions rather than the video's natural dimensions
+            canvas.width = videoContainer.clientWidth;
+            canvas.height = videoContainer.clientHeight;
+            console.log(`Canvas size updated to: ${canvas.width}x${canvas.height}`);
           };
           
           // Update size immediately if metadata already loaded
@@ -287,12 +269,13 @@
           gl.enableVertexAttribArray(positionLocation);
           gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
           
+          // Modify the texture coordinates to stretch the video across the entire canvas
           const texCoordBuffer = gl.createBuffer();
           const texCoords = [
-            0.0, 1.0,
-            1.0, 1.0,
-            0.0, 0.0,
-            1.0, 0.0
+            0.0, 1.0,  // bottom left
+            1.0, 1.0,  // bottom right
+            0.0, 0.0,  // top left
+            1.0, 0.0   // top right
           ];
           gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
           gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(texCoords), gl.STATIC_DRAW);
@@ -325,10 +308,7 @@
           if (data && data.chromaSmoothness !== undefined) {
             smoothness = data.chromaSmoothness;
           }
-          
-console.log(`Chroma key similarity: ${similarity}, smoothness: ${smoothness}`);
-console.log(data);
-
+        
           const similarityLocation = gl.getUniformLocation(program, 'u_similarity');
           gl.uniform1f(similarityLocation, similarity);
           
@@ -350,9 +330,17 @@ console.log(data);
           // Render function
           function render() {
             if (!element.paused && !element.ended) {
+              // Make sure canvas size matches container size
+              if (videoContainer.clientWidth !== canvas.width || videoContainer.clientHeight !== canvas.height) {
+                updateCanvasSize();
+              }
+              
               // Update texture with new video frame
               gl.bindTexture(gl.TEXTURE_2D, texture);
               gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, element);
+              
+              // Set viewport to match canvas size
+              gl.viewport(0, 0, canvas.width, canvas.height);
               
               // Draw
               gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
@@ -433,48 +421,90 @@ console.log(data);
       let item;
       
       // Position coordinates (ensure they're relative to the current window)
-      const xPos = data.x || 0;
-      const yPos = data.y || 0;
+      const xPos = data.x !== undefined ? data.x : 0;
+      const yPos = data.y !== undefined ? data.y : 0;
+      
+      // Get window dimensions for positioning and scaling
+      const windowWidth = window.innerWidth;
+      const windowHeight = window.innerHeight;
       
       // Log positioning info
       console.log(`Displaying overlay at position: x=${xPos}, y=${yPos}`);
-      console.log(`Window dimensions: ${window.innerWidth}x${window.innerHeight}`);
+      console.log(`Window dimensions: ${windowWidth}x${windowHeight}`);
       
-      // If no dimensions are specified, try to get natural media dimensions
-      if (!data.width || !data.height) {
+      // Handle special fullscreen case
+      const isFullscreen = (data.width === windowWidth && data.height === windowHeight) || 
+                           (data.width === 1920 && data.height === 1080 && xPos === 0 && yPos === 0);
+      
+      // Calculate dimensions
+      let finalWidth, finalHeight;
+      
+      if (isFullscreen) {
+        // For fullscreen intent, make it match window exactly
+        finalWidth = windowWidth;
+        finalHeight = windowHeight;
+        console.log("Using fullscreen mode");
+      } else if (data.width && data.height) {
+        // Use provided dimensions
+        finalWidth = data.width;
+        finalHeight = data.height;
+        
+        // If media is too large for the screen, scale it down proportionally
+        if (finalWidth > windowWidth || finalHeight > windowHeight) {
+          const widthRatio = windowWidth / finalWidth;
+          const heightRatio = windowHeight / finalHeight;
+          const ratio = Math.min(widthRatio, heightRatio);
+          
+          finalWidth = Math.floor(finalWidth * ratio);
+          finalHeight = Math.floor(finalHeight * ratio);
+          console.log(`Scaled down to: ${finalWidth}x${finalHeight}`);
+        }
+      } else {
+        // If no dimensions are specified, try to get natural media dimensions
         const naturalSize = await getMediaDimensions(data.path, data.type);
         if (naturalSize) {
-          data.width = naturalSize.width;
-          data.height = naturalSize.height;
+          finalWidth = naturalSize.width;
+          finalHeight = naturalSize.height;
           
           // If media is too large for the screen, scale it down
-          const windowWidth = window.innerWidth;
-          const windowHeight = window.innerHeight;
-          
-          if (data.width > windowWidth || data.height > windowHeight) {
-            const widthRatio = windowWidth / data.width;
-            const heightRatio = windowHeight / data.height;
+          if (finalWidth > windowWidth || finalHeight > windowHeight) {
+            const widthRatio = windowWidth / finalWidth;
+            const heightRatio = windowHeight / finalHeight;
             const ratio = Math.min(widthRatio, heightRatio);
             
-            data.width = Math.floor(data.width * ratio);
-            data.height = Math.floor(data.height * ratio);
+            finalWidth = Math.floor(finalWidth * ratio);
+            finalHeight = Math.floor(finalHeight * ratio);
+            console.log(`Using natural size scaled: ${finalWidth}x${finalHeight}`);
           }
+        } else {
+          // Fallback if dimensions can't be determined
+          finalWidth = windowWidth / 2;
+          finalHeight = windowHeight / 2;
+          console.log(`Using fallback dimensions: ${finalWidth}x${finalHeight}`);
         }
       }
+      
+      // Ensure item stays within viewport bounds
+      const finalXPos = Math.min(Math.max(0, xPos), windowWidth - finalWidth);
+      const finalYPos = Math.min(Math.max(0, yPos), windowHeight - finalHeight);
+      
+      console.log(`Final position and size: x=${finalXPos}, y=${finalYPos}, w=${finalWidth}, h=${finalHeight}`);
       
       if (data.type === 'video') {
         // Create a video element for MP4 files
         const videoContainer = document.createElement('div');
         videoContainer.className = 'overlay-item overlay-video';
-        videoContainer.style.left = `${xPos}px`;
-        videoContainer.style.top = `${yPos}px`;
-        videoContainer.style.width = data.width ? `${data.width}px` : 'auto';
-        videoContainer.style.height = data.height ? `${data.height}px` : 'auto';
+        videoContainer.style.left = `${finalXPos}px`;
+        videoContainer.style.top = `${finalYPos}px`;
+        videoContainer.style.width = `${finalWidth}px`;
+        videoContainer.style.height = `${finalHeight}px`;
         
         const video = document.createElement('video');
         video.autoplay = true;
         video.loop = false;
-        video.muted = true;  // Muted by default
+        // Allow sound to play by not setting muted=true
+        video.muted = false;
+        video.volume = data.volume !== undefined ? data.volume : 1.0; // Add volume control
         
         // IMPORTANT: First add video to container, THEN add container to DOM
         videoContainer.appendChild(video);
@@ -510,10 +540,10 @@ console.log(data);
         item.className = `overlay-item overlay-${data.type}`;
         
         // Position the item
-        item.style.left = `${xPos}px`;
-        item.style.top = `${yPos}px`;
-        item.style.width = data.width ? `${data.width}px` : 'auto';
-        item.style.height = data.height ? `${data.height}px` : 'auto';
+        item.style.left = `${finalXPos}px`;
+        item.style.top = `${finalYPos}px`;
+        item.style.width = `${finalWidth}px`;
+        item.style.height = `${finalHeight}px`;
         
         // Set the background image
         item.style.backgroundImage = `url('${data.path}')`;
