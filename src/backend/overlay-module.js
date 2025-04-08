@@ -3,6 +3,12 @@ import path from 'path';
 import { __dirname, downloadAndCacheFile, calculateDimensions, clearFileCache } from './utils.js';
 import { saveMonitorConfig } from './monitor-select-module.js';
 import { showTwitchSettingsWindow, addRewardListener, removeRewardListener } from './twitch-module.js';
+import { 
+  sendOverlayToWebClients, 
+  getWebServerStatus, 
+  initWebServer, 
+  stopWebServer 
+} from './web-server-module.js';
 
 // Main overlay window
 let mainWindow;
@@ -65,6 +71,14 @@ export function createOverlay(monitorInfo) {
   ipcMain.on('overlay-item-completed', () => {
     processNextQueueItem();
   });
+  
+  // Setup web client completion handler
+  global.webClientCompletedOverlay = () => {
+    processNextQueueItem();
+  };
+  
+  // Initialize the web server automatically on startup
+  initWebServer();
 
   return mainWindow;
 }
@@ -135,6 +149,9 @@ function processNextQueueItem() {
   if (mainWindow) {
     console.log('Processing next queue item:', nextItem.type);
     mainWindow.webContents.send('display-overlay', nextItem);
+    
+    // Also send to any connected web clients
+    sendOverlayToWebClients(nextItem);
   }
 }
 
@@ -163,11 +180,29 @@ function createSystemTray() {
     trayIcon = null;
   }
   
-  // Create the tray
-  tray = new Tray(trayIcon || null);
-  tray.setToolTip('Twitch Redeem Overlay');
+  // Create the tray if it doesn't exist already
+  if (!tray) {
+    tray = new Tray(trayIcon || null);
+    tray.setToolTip('Twitch Redeem Overlay');
+    
+    // Show context menu on left click as well (helpful for Windows users)
+    tray.on('click', () => {
+      tray.popUpContextMenu();
+    });
+  }
   
-  // Create context menu
+  // Just update the context menu for the existing tray
+  updateTrayMenu();
+}
+
+// Update the tray menu without recreating the tray
+function updateTrayMenu() {
+  if (!tray) return;
+  
+  // Get current web server status
+  const webServerStatus = getWebServerStatus();
+  const webServerUrl = webServerStatus.url || `http://localhost:${webServerStatus.port}`;
+  
   const contextMenu = Menu.buildFromTemplate([
     {
       label: 'Toggle Border',
@@ -192,6 +227,35 @@ function createSystemTray() {
     },
     { type: 'separator' },
     {
+      label: `Web Server (${webServerStatus.isRunning ? 'Running' : 'Stopped'})`,
+      submenu: [
+        {
+          label: webServerStatus.isRunning ? `Stop Server` : 'Start Server',
+          click: () => {
+            if (webServerStatus.isRunning) {
+              stopWebServer();
+            } else {
+              initWebServer();
+            }
+            // Update tray menu without recreating the tray
+            updateTrayMenu();
+          }
+        },
+        {
+          label: `URL: ${webServerUrl}`,
+          click: () => {
+            // Open the URL in default browser
+            require('electron').shell.openExternal(webServerUrl);
+          },
+          enabled: webServerStatus.isRunning
+        },
+        {
+          label: `Connected Clients: ${webServerStatus.connectedClients}`,
+          enabled: false // Info only
+        }
+      ]
+    },
+    {
       label: 'Twitch Settings',
       click: () => {
         // Open Twitch settings window
@@ -213,11 +277,6 @@ function createSystemTray() {
   ]);
   
   tray.setContextMenu(contextMenu);
-  
-  // Show context menu on left click as well (helpful for Windows users)
-  tray.on('click', () => {
-    tray.popUpContextMenu();
-  });
 }
 
 // Handle clear cache Redis command
@@ -300,6 +359,9 @@ export function getMainWindow() {
 export function closeOverlay() {
   // Clean up Twitch reward listener
   removeRewardListener(handleTwitchReward);
+  
+  // Stop web server if running
+  stopWebServer();
   
   if (mainWindow) {
     mainWindow.close();

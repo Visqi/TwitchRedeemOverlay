@@ -19,6 +19,7 @@ import {
 import { initializeTwitchModule } from './twitch-module.js';
 import { initializeConfig, logConfigStatus } from './config/app-config.js';
 import { initLogger, getCurrentLogFilePath } from './utils/logger.js';
+import { stopWebServer } from './web-server-module.js';
 import path from 'path';
 import fs from 'fs-extra';
 
@@ -145,6 +146,9 @@ app.on('window-all-closed', async () => {
   // Clear cache before quitting
   await clearFileCache();
   
+  // Stop web server if running
+  await stopWebServer();
+  
   if (process.platform !== 'darwin') {
     // Disconnect Redis client before quitting
     const redisClient = getRedisClient();
@@ -159,6 +163,9 @@ app.on('window-all-closed', async () => {
 app.on('before-quit', async (event) => {
   // Clear cache before quitting
   await clearFileCache();
+  
+  // Stop web server if running
+  await stopWebServer();
   
   const redisClient = getRedisClient();
   if (redisClient) {
