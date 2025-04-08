@@ -47,6 +47,14 @@ A customizable overlay application that displays media when viewers redeem Twitc
    npm start
    ```
 
+### OBS Setup
+
+1. You can start a WebServer using the TrayMenu
+
+2. Capture that WebServer in OBS via Browser Source and setup the width & height correctly
+
+3. Activate "Let OBS control audio" and mute it on the scene
+
 ### Building for Production
 
 To build a standalone application:
