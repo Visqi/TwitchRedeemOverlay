@@ -13,6 +13,7 @@ let io = null;
 let app = null;
 let isRunning = false;
 let connectedClients = 0;
+let webAudioMuted = false; // Tracking mute state for web clients
 
 // Track local file paths for serving content
 const localFilesMap = new Map();
@@ -36,6 +37,25 @@ function getOverlayHtml() {
     '    send: (channel, data) => {\n' +
     '      socket.emit(channel, data);\n' +
     '    }\n' +
+    '  };\n' +
+    '  \n' +
+    '  // Handle audio muting for web clients\n' +
+    '  socket.on("toggle-web-audio", (muted) => {\n' +
+    '    document.querySelectorAll("video, audio").forEach(el => {\n' +
+    '      el.muted = muted;\n' +
+    '    });\n' +
+    '    // Store preference for future media elements\n' +
+    '    window.webAudioMuted = muted;\n' +
+    '  });\n' +
+    '  \n' +
+    '  // Apply mute settings to any new media elements\n' +
+    '  const originalCreateElement = document.createElement;\n' +
+    '  document.createElement = function(tagName) {\n' +
+    '    const element = originalCreateElement.call(document, tagName);\n' +
+    '    if ((tagName.toLowerCase() === "video" || tagName.toLowerCase() === "audio") && window.webAudioMuted) {\n' +
+    '      element.muted = true;\n' +
+    '    }\n' +
+    '    return element;\n' +
     '  };\n' +
     '</script>\n';
   
@@ -121,6 +141,9 @@ export function initWebServer(port = DEFAULT_PORT) {
       console.log('New web client connected');
       connectedClients++;
       
+      // Send current audio mute state to new clients
+      socket.emit('toggle-web-audio', webAudioMuted);
+      
       // Listen for overlay-item-completed events from clients
       socket.on('overlay-item-completed', () => {
         console.log('Web client reported overlay item completed');
@@ -173,6 +196,22 @@ export function stopWebServer() {
   }
 }
 
+// Toggle web audio mute state
+export function toggleWebAudioMute(muted) {
+  webAudioMuted = muted;
+  if (isRunning && io) {
+    io.emit('toggle-web-audio', webAudioMuted);
+    console.log(`Web audio ${webAudioMuted ? 'muted' : 'unmuted'}`);
+    return true;
+  }
+  return false;
+}
+
+// Get current web audio mute state
+export function getWebAudioMuteState() {
+  return webAudioMuted;
+}
+
 // Register a local file to make it accessible via the web server
 function registerLocalFile(localPath) {
   // If already registered, return existing ID
@@ -221,7 +260,8 @@ export function getWebServerStatus() {
     isRunning,
     port: serverPort,
     url: isRunning ? `http://localhost:${serverPort}` : null,
-    connectedClients
+    connectedClients,
+    webAudioMuted
   };
 }
 

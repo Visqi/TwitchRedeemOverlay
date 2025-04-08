@@ -1,4 +1,4 @@
-import { BrowserWindow, screen, Menu, Tray, app, ipcMain } from 'electron';
+import { BrowserWindow, screen, Menu, Tray, app, ipcMain, shell } from 'electron';
 import path from 'path';
 import { __dirname, downloadAndCacheFile, calculateDimensions, clearFileCache } from './utils.js';
 import { saveMonitorConfig } from './monitor-select-module.js';
@@ -9,6 +9,8 @@ import {
   initWebServer, 
   stopWebServer 
 } from './web-server-module.js';
+
+import { toggleWebAudioMute } from './web-server-module.js';
 
 // Main overlay window
 let mainWindow;
@@ -76,9 +78,6 @@ export function createOverlay(monitorInfo) {
   global.webClientCompletedOverlay = () => {
     processNextQueueItem();
   };
-  
-  // Initialize the web server automatically on startup
-  initWebServer();
 
   return mainWindow;
 }
@@ -239,19 +238,33 @@ function updateTrayMenu() {
             }
             // Update tray menu without recreating the tray
             updateTrayMenu();
+
+            setTimeout(() => { updateTrayMenu();}, 1000);
           }
         },
         {
           label: `URL: ${webServerUrl}`,
           click: () => {
             // Open the URL in default browser
-            require('electron').shell.openExternal(webServerUrl);
+            shell.openExternal(webServerUrl);
           },
           enabled: webServerStatus.isRunning
         },
         {
           label: `Connected Clients: ${webServerStatus.connectedClients}`,
           enabled: false // Info only
+        },
+        { type: 'separator' },
+        {
+          label: 'Toggle Web Audio',
+          type: 'checkbox',
+          checked: webServerStatus.webAudioMuted,
+          click: (menuItem) => {
+            // Toggle mute state for web clients
+            toggleWebAudioMute(menuItem.checked);
+            updateTrayMenu();
+          },
+          enabled: webServerStatus.isRunning
         }
       ]
     },
