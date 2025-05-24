@@ -277,6 +277,30 @@ function updateTrayMenu() {
     },
     { type: 'separator' },
     {
+      label: 'Developer Tools',
+      visible: process.env.NODE_ENV === 'development', // Only show in dev mode
+      submenu: [
+        {
+          label: 'Toggle DevTools for Overlay',
+          click: () => {
+            if (mainWindow && mainWindow.webContents) {
+              mainWindow.webContents.toggleDevTools();
+            }
+          }
+        },
+        {
+          label: 'Toggle DevTools for Focused Window',
+          click: () => {
+            const focusedWindow = BrowserWindow.getFocusedWindow();
+            if (focusedWindow && focusedWindow.webContents) {
+              focusedWindow.webContents.toggleDevTools();
+            }
+          }
+        },
+      ]
+    },
+    { type: 'separator' },
+    {
       label: 'Copyright © 2025 Visqi',
       enabled: false // Disabled menu item, just for display
     },
