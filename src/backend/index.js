@@ -1,20 +1,11 @@
 import { app, BrowserWindow, dialog, Menu } from 'electron';
 import { clearFileCache } from './utils.js';
 import { 
-  loadRedisConfig, 
-  initRedisClient, 
-  showRedisConnectionDialog,
-  disconnectRedis,
-  getRedisClient
-} from './redis-module.js';
-import { 
   showMonitorSelectionDialog,
   loadMonitorConfig 
 } from './monitor-select-module.js';
 import { 
   createOverlay, 
-  handleRedisMessage, 
-  handleClearCacheMessage 
 } from './overlay-module.js';
 import { initializeTwitchModule } from './twitch-module.js';
 import { initializeConfig, logConfigStatus } from './config/app-config.js';
@@ -30,10 +21,6 @@ app.commandLine.appendSwitch('v', '1'); // Verbose logging
 // Initialize our file logger
 const logFilePath = initLogger();
 console.log(`Application logs will be saved to: ${logFilePath}`);
-
-// Store references to handler functions globally so they can be accessed from other modules
-global.handleRedisMessage = handleRedisMessage;
-global.handleClearCacheMessage = handleClearCacheMessage;
 
 // Add a menu item to show log file location
 const createAppMenu = () => {
@@ -148,15 +135,6 @@ app.on('window-all-closed', async () => {
   
   // Stop web server if running
   await stopWebServer();
-  
-  if (process.platform !== 'darwin') {
-    // Disconnect Redis client before quitting
-    const redisClient = getRedisClient();
-    if (redisClient) {
-      await disconnectRedis();
-    }
-    app.quit();
-  }
 });
 
 // Handle app shutdown
@@ -166,11 +144,4 @@ app.on('before-quit', async (event) => {
   
   // Stop web server if running
   await stopWebServer();
-  
-  const redisClient = getRedisClient();
-  if (redisClient) {
-    event.preventDefault();
-    await disconnectRedis();
-    app.exit();
-  }
 });

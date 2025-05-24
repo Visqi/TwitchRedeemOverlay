@@ -275,10 +275,9 @@ function updateTrayMenu() {
         showTwitchSettingsWindow();
       }
     },
-    { type: 'separator' },
+    /*{ type: 'separator'},
     {
       label: 'Developer Tools',
-      visible: process.env.NODE_ENV === 'development', // Only show in dev mode
       submenu: [
         {
           label: 'Toggle DevTools for Overlay',
@@ -298,7 +297,7 @@ function updateTrayMenu() {
           }
         },
       ]
-    },
+    },*/
     { type: 'separator' },
     {
       label: 'Copyright © 2025 Visqi',
@@ -314,77 +313,6 @@ function updateTrayMenu() {
   ]);
   
   tray.setContextMenu(contextMenu);
-}
-
-// Handle clear cache Redis command
-export async function handleClearCacheMessage() {
-  await clearFileCache();
-  if (mainWindow) {
-    mainWindow.webContents.send('clear-cache');
-  }
-}
-
-// Handle Redis message for displaying content in overlay
-export async function handleRedisMessage(message, channel) {
-  try {
-    const data = JSON.parse(message);
-    console.log(`Received ${channel} command:`, data);
-    
-    if (mainWindow) {
-      // Determine the media type
-      let mediaType;
-      switch (channel) {
-        case 'display-overlay-gif':
-          mediaType = 'gif';
-          break;
-        case 'display-overlay-image':
-          mediaType = 'image';
-          break;
-        case 'display-overlay-video':
-          mediaType = 'video';
-          break;
-        default:
-          mediaType = 'unknown';
-      }
-      
-      // Get screen dimensions for size calculations
-      const currentScreen = screen.getDisplayMatching(mainWindow.getBounds());
-      const screenWidth = currentScreen.size.width;
-      const screenHeight = currentScreen.size.height;
-      
-      // Calculate dimensions if needed
-      let dimensions = calculateDimensions(
-        data.width, 
-        data.height, 
-        screenWidth,
-        screenHeight
-      );
-      
-      // Download and cache the file if it's a URL
-      let localPath = data.path;
-      if (data.path.startsWith('http')) {
-        localPath = await downloadAndCacheFile(data.path);
-        if (!localPath) {
-          console.error('Failed to download and cache file');
-          return;
-        }
-      }
-      
-      // Send the data to the renderer process
-      addToOverlayQueue({
-        type: mediaType,
-        path: localPath,
-        x: data.x || 0,
-        y: data.y || 0,
-        duration: data.duration || 5000,
-        width: dimensions?.width,
-        height: dimensions?.height,
-        chromaKey: data.chromaKey || null, // Pass chroma key color if specified
-      });
-    }
-  } catch (err) {
-    console.error('Error processing Redis message:', err);
-  }
 }
 
 // Get the main window instance
