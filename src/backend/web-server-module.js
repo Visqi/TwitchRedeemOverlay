@@ -79,6 +79,10 @@ export function initWebServer(port = DEFAULT_PORT) {
     
     // Serve the modified overlay HTML
     app.get('/', (req, res) => {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      res.setHeader('Surrogate-Control', 'no-store');
       res.send(getOverlayHtml());
     });
     
@@ -125,6 +129,7 @@ export function initWebServer(port = DEFAULT_PORT) {
         }
         
         res.setHeader('Content-Type', contentType);
+        res.setHeader('Cache-Control', 'no-cache, must-revalidate'); // Added cache control
         
         // Stream the file to the client
         const fileStream = fs.createReadStream(filePath);
